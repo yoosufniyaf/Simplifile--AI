@@ -1,0 +1,145 @@
+{
+  "identity": {
+    "name": "Simplifile AI",
+    "archetype": "The Performance Pro",
+    "vibe": "Modern, Minimal, Trustworthy, Automated",
+    "theme_strategy": "Dark Mode Default (Fintech/SaaS Aesthetic)"
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Outfit, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-5xl md:text-6xl font-bold tracking-tight",
+      "h2": "text-4xl md:text-5xl font-semibold tracking-tight",
+      "h3": "text-2xl md:text-3xl font-semibold",
+      "body_lg": "text-lg leading-relaxed",
+      "body_base": "text-base leading-relaxed text-muted-foreground",
+      "caption": "text-sm text-muted-foreground uppercase tracking-wider"
+    },
+    "import_instruction": "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');"
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#6366f1",
+        "foreground": "#ffffff",
+        "hover": "#4f46e5"
+      },
+      "background": "#09090b",
+      "foreground": "#fafafa",
+      "card": {
+        "DEFAULT": "#18181b",
+        "foreground": "#fafafa",
+        "border": "#27272a"
+      },
+      "muted": {
+        "DEFAULT": "#27272a",
+        "foreground": "#a1a1aa"
+      },
+      "accent": {
+        "DEFAULT": "#27272a",
+        "foreground": "#fafafa",
+        "glow": "rgba(99, 102, 241, 0.15)"
+      },
+      "border": "#27272a",
+      "input": "#27272a",
+      "ring": "#6366f1",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444"
+    },
+    "gradients": {
+      "hero_glow": "radial-gradient(circle at center, rgba(99, 102, 241, 0.15) 0%, transparent 70%)",
+      "card_shimmer": "linear-gradient(110deg, #18181b 8%, #27272a 18%, #18181b 33%)"
+    }
+  },
+  "layout_strategies": {
+    "marketing": {
+      "grid": "grid-cols-1 md:grid-cols-12 gap-8",
+      "container": "max-w-7xl mx-auto px-6 md:px-8",
+      "spacing": "py-24 md:py-32",
+      "hero_alignment": "Centered text with wide visual impact"
+    },
+    "dashboard": {
+      "structure": "Sidebar Layout (Fixed Left Nav)",
+      "grid": "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+      "card_style": "bg-card border border-border rounded-xl p-6 shadow-sm hover:border-primary/50 transition-colors"
+    },
+    "bento_grid": {
+      "wrapper": "grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-[minmax(180px,auto)]",
+      "item_large": "md:col-span-2 md:row-span-2",
+      "item_tall": "md:row-span-2",
+      "item_standard": "md:col-span-1"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-white hover:bg-primary/90 shadow-[0_0_20px_rgba(99,102,241,0.3)] rounded-lg px-8 py-3 font-medium transition-all hover:scale-[1.02]",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg px-6 py-3 font-medium",
+      "outline": "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground rounded-lg px-6 py-3"
+    },
+    "cards": {
+      "marketing": "group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-8 hover:border-white/20 transition-all duration-300",
+      "dashboard": "rounded-xl border border-border bg-card text-card-foreground shadow-sm",
+      "pricing": "flex flex-col rounded-3xl border border-border bg-card p-8 shadow-lg hover:border-primary/50 transition-all relative overflow-hidden"
+    },
+    "inputs": {
+      "base": "flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": {
+      "nav": "backdrop-blur-xl bg-background/70 border-b border-border/50 sticky top-0 z-50",
+      "overlay": "backdrop-blur-md bg-black/40"
+    },
+    "shadows": {
+      "glow": "0 0 40px -10px rgba(99, 102, 241, 0.3)",
+      "card": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)"
+    },
+    "borders": {
+      "subtle": "1px solid rgba(255,255,255,0.08)",
+      "highlight": "1px solid rgba(99,102,241,0.5)"
+    }
+  },
+  "image_assets": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1760387252509-ecef38b4936e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMGZpbmFuY2lhbCUyMHRlY2hub2xvZ3klMjBkYXRhJTIwZmxvdyUyMGRhcmslMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3MzkzNjIzMHww&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract light trails for 'flow/automation' background"
+    },
+    "feature_finance": {
+      "url": "https://images.unsplash.com/photo-1647067517631-aa36cda58a17?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGZpbmFuY2lhbCUyMHRlY2hub2xvZ3klMjBkYXRhJTIwZmxvdyUyMGRhcmslMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3MzkzNjIzMHww&ixlib=rb-4.1.0&q=85",
+      "description": "Close up numbers for Bookkeeping/Data features"
+    },
+    "testimonial_user": {
+      "url": "https://images.unsplash.com/photo-1624749076719-52c184a2e2e3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMG93bmVyJTIwd29ya2luZyUyMG9uJTIwbGFwdG9wJTIwbWluaW1hbGlzdCUyMG9mZmljZXxlbnwwfHx8fDE3NzM5MzYyMzB8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Professional user for testimonial/persona"
+    },
+    "workspace_vibe": {
+      "url": "https://images.unsplash.com/photo-1758640920659-0bb864175983?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMG93bmVyJTIwd29ya2luZyUyMG9uJTIwbGFwdG9wJTIwbWluaW1hbGlzdCUyMG9mZmljZXxlbnwwfHx8fDE3NzM5MzYyMzB8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Minimal workspace for 'Simplification' concept"
+    }
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Dark Mode is DEFAULT. Ensure 'dark' class is applied to the root/html element or handled via theme provider.",
+    "Use 'Outfit' font for all Headings (h1-h3) and 'Inter' for body text.",
+    "For the Landing Page: Use the 'hero_background' image with a heavy overlay (bg-black/80) so text pops. Use 'text-transparent bg-clip-text bg-gradient-to-r from-white to-white/50' for the main H1.",
+    "For the Dashboard: Use a fixed sidebar layout. The main content area should be 'bg-background' or slightly lighter 'bg-zinc-950/50'. Cards should be distinct.",
+    "Pricing Page: Emphasize the 'Premium' plan ($29.99) with a border-primary and a 'Most Popular' badge.",
+    "Charts: Use Shadcn Charts (Recharts wrapper). Style them with the primary color (#6366f1) and success color (#10b981).",
+    "Forms: Use Shadcn Form components. Ensure inputs have 'bg-input/50' and 'focus:ring-primary'.",
+    "Icons: Use Lucide-React icons. Stroke width 1.5px for a refined look.",
+    "Motion: Add 'framer-motion' for simple entrance animations (fade-in-up) on the landing page elements.",
+    "Tailwind Config: You MUST update the tailwind.config.js to include the custom colors (zinc-based structure) and fonts."
+  ],
+  "universal_guidelines": [
+    "Do not use gradients for dark colors.",
+    "Don't make generic centered layouts. Use asymmetrical bento grids for features.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for sticky headers.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Interactive elements MUST include data-testid attribute."
+  ]
+}
