@@ -27,6 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import {
+  AISection,
+  AIAnalysisCard,
+  AILoadingState,
+  AIEmptyState
+} from "../components/ui/ai-components";
 import { 
   Calculator, 
   Upload, 
@@ -37,7 +43,9 @@ import {
   Loader2,
   Edit2,
   Trash2,
-  Lock
+  Lock,
+  BarChart3,
+  Zap
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -53,6 +61,43 @@ const CATEGORIES = [
   "salary",
   "other"
 ];
+
+// Metric Card Component
+const MetricCard = ({ label, value, sublabel, icon: Icon, trend, color = "primary" }) => {
+  const colors = {
+    primary: "bg-primary/10 border-primary/20 text-primary",
+    green: "bg-green-500/10 border-green-500/20 text-green-500",
+    red: "bg-red-500/10 border-red-500/20 text-red-500",
+    amber: "bg-amber-500/10 border-amber-500/20 text-amber-500"
+  };
+
+  return (
+    <Card className={colors[color].split(' ').slice(0, 2).join(' ')}>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">{label}</p>
+            <p className={`text-2xl font-bold ${colors[color].split(' ')[2]}`} style={{ fontFamily: 'Outfit, sans-serif' }}>
+              {value}
+            </p>
+            {sublabel && <p className="text-xs text-muted-foreground mt-1">{sublabel}</p>}
+          </div>
+          {Icon && (
+            <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${colors[color].split(' ')[0]}`}>
+              <Icon className={`h-5 w-5 ${colors[color].split(' ')[2]}`} />
+            </div>
+          )}
+        </div>
+        {trend && (
+          <div className={`flex items-center gap-1 mt-2 text-xs ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
+            {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            <span>{Math.abs(trend)}% from last period</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const BookkeepingPage = () => {
   const { token, checkPlanAccess } = useAuth();
@@ -220,13 +265,13 @@ const BookkeepingPage = () => {
 
   const getCategoryColor = (category) => {
     const colors = {
-      marketing: "bg-purple-500/20 text-purple-400",
-      software: "bg-blue-500/20 text-blue-400",
-      fees: "bg-amber-500/20 text-amber-400",
-      hosting: "bg-green-500/20 text-green-400",
-      infrastructure: "bg-cyan-500/20 text-cyan-400",
-      salary: "bg-pink-500/20 text-pink-400",
-      other: "bg-gray-500/20 text-gray-400"
+      marketing: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+      software: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+      fees: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+      hosting: "bg-green-500/20 text-green-400 border-green-500/30",
+      infrastructure: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
+      salary: "bg-pink-500/20 text-pink-400 border-pink-500/30",
+      other: "bg-gray-500/20 text-gray-400 border-gray-500/30"
     };
     return colors[category] || colors.other;
   };
@@ -234,16 +279,17 @@ const BookkeepingPage = () => {
   if (!hasPremiumAccess) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center" data-testid="bookkeeping-locked">
-        <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+        <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
           <Lock className="h-8 w-8 text-primary" />
         </div>
         <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
           Premium Feature
         </h2>
-        <p className="text-muted-foreground mb-6 max-w-md">
+        <p className="text-muted-foreground mb-6 max-w-md text-sm">
           Upgrade to Premium to access AI-powered bookkeeping, automatic transaction categorization, and financial insights.
         </p>
         <Button className="glow-button" onClick={() => window.location.href = "/dashboard/settings"}>
+          <Zap className="mr-2 h-4 w-4" />
           Upgrade to Premium
         </Button>
       </div>
@@ -287,210 +333,172 @@ const BookkeepingPage = () => {
         </div>
       </div>
 
-      {/* Insights Cards */}
+      {/* Key Metrics */}
       {insights && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">MRR</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                ${insights.mrr.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground">Monthly Recurring</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Burn Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-amber-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                ${insights.burn_rate.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground">Per Month</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Runway</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                {insights.runway_months} mo
-              </div>
-              <p className="text-xs text-muted-foreground">Estimated</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Profit Margin</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${insights.profit_margin >= 0 ? "text-green-500" : "text-red-500"}`} style={{ fontFamily: 'Outfit, sans-serif' }}>
-                {insights.profit_margin}%
-              </div>
-              <p className="text-xs text-muted-foreground">Net</p>
-            </CardContent>
-          </Card>
+          <MetricCard
+            label="MRR"
+            value={`$${insights.mrr.toLocaleString()}`}
+            sublabel="Monthly Recurring"
+            icon={BarChart3}
+            color="primary"
+          />
+          <MetricCard
+            label="Burn Rate"
+            value={`$${insights.burn_rate.toLocaleString()}`}
+            sublabel="Per Month"
+            icon={TrendingDown}
+            color="amber"
+          />
+          <MetricCard
+            label="Runway"
+            value={`${insights.runway_months} mo`}
+            sublabel="Estimated"
+            icon={Calculator}
+            color="primary"
+          />
+          <MetricCard
+            label="Profit Margin"
+            value={`${insights.profit_margin}%`}
+            sublabel="Net"
+            icon={insights.profit_margin >= 0 ? TrendingUp : TrendingDown}
+            color={insights.profit_margin >= 0 ? "green" : "red"}
+          />
         </div>
       )}
 
       {/* Summary Cards */}
       {insights && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="bg-green-500/10 border-green-500/20">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Income</p>
-                <p className="text-2xl font-bold text-green-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                  ${insights.total_income.toLocaleString()}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-red-500/10 border-red-500/20">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-red-500/20 flex items-center justify-center">
-                <TrendingDown className="h-6 w-6 text-red-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Expenses</p>
-                <p className="text-2xl font-bold text-red-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                  ${insights.total_expenses.toLocaleString()}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className={insights.net_profit >= 0 ? "bg-primary/10 border-primary/20" : "bg-amber-500/10 border-amber-500/20"}>
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${insights.net_profit >= 0 ? "bg-primary/20" : "bg-amber-500/20"}`}>
-                <DollarSign className={`h-6 w-6 ${insights.net_profit >= 0 ? "text-primary" : "text-amber-500"}`} />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Net Profit</p>
-                <p className={`text-2xl font-bold ${insights.net_profit >= 0 ? "text-primary" : "text-amber-500"}`} style={{ fontFamily: 'Outfit, sans-serif' }}>
-                  ${insights.net_profit.toLocaleString()}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <MetricCard
+            label="Total Income"
+            value={`$${insights.total_income.toLocaleString()}`}
+            icon={TrendingUp}
+            color="green"
+          />
+          <MetricCard
+            label="Total Expenses"
+            value={`$${insights.total_expenses.toLocaleString()}`}
+            icon={TrendingDown}
+            color="red"
+          />
+          <MetricCard
+            label="Net Profit"
+            value={`$${insights.net_profit.toLocaleString()}`}
+            icon={DollarSign}
+            color={insights.net_profit >= 0 ? "primary" : "amber"}
+          />
         </div>
       )}
 
       {/* AI Financial Analysis */}
       {insights?.ai_analysis && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
-              <span className="text-primary">🤖</span>
-              AI Financial Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="prose prose-invert prose-sm max-w-none">
-              <div className="whitespace-pre-wrap text-muted-foreground text-sm leading-relaxed">
-                {insights.ai_analysis}
-              </div>
-            </div>
-            {insights.generated_by === "mock" && (
-              <p className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border">
-                💡 Connect your OpenAI API key for personalized AI-powered financial insights.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <AIAnalysisCard 
+          content={insights.ai_analysis} 
+          title="AI Financial Analysis"
+        />
       )}
 
       {/* Transactions Table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Transactions</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
+            <AILoadingState message="Loading transactions..." />
           ) : transactions.length === 0 ? (
-            <div className="text-center py-12">
-              <Calculator className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-semibold mb-2">No transactions yet</h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Import a CSV file or add transactions manually
-              </p>
-            </div>
+            <AIEmptyState
+              icon={Calculator}
+              title="No transactions yet"
+              description="Import a CSV file or add transactions manually to start tracking your finances."
+              action={
+                <div className="flex gap-3">
+                  <Button variant="outline" asChild>
+                    <label className="cursor-pointer">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Import CSV
+                      <input type="file" className="hidden" accept=".csv" onChange={handleUpload} />
+                    </label>
+                  </Button>
+                  <Button onClick={() => setAddDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Transaction
+                  </Button>
+                </div>
+              }
+            />
           ) : (
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((trans) => (
-                    <TableRow key={trans.id} data-testid={`transaction-row-${trans.id}`}>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(trans.date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="font-medium">{trans.description}</TableCell>
-                      <TableCell>
-                        <Badge className={getCategoryColor(trans.category)} variant="secondary">
-                          {trans.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className={`text-right font-medium ${trans.type === "income" ? "text-green-500" : "text-red-500"}`}>
-                        {trans.type === "income" ? "+" : "-"}${Math.abs(trans.amount).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openEditDialog(trans)}
-                            disabled={!hasEnterpriseAccess}
-                            data-testid={`edit-trans-${trans.id}`}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteTransaction(trans.id)}
-                            disabled={!hasEnterpriseAccess}
-                            data-testid={`delete-trans-${trans.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Description</TableHead>
+                      <TableHead className="font-semibold">Category</TableHead>
+                      <TableHead className="text-right font-semibold">Amount</TableHead>
+                      <TableHead className="text-right font-semibold">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          {!hasEnterpriseAccess && transactions.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
-              <Lock className="h-3 w-3" />
-              Upgrade to Enterprise to edit or delete transactions
-            </p>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.map((trans) => (
+                      <TableRow key={trans.id} className="group" data-testid={`transaction-row-${trans.id}`}>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(trans.date).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="font-medium">{trans.description}</TableCell>
+                        <TableCell>
+                          <Badge className={getCategoryColor(trans.category)} variant="secondary">
+                            {trans.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className={`text-right font-semibold ${trans.type === "income" ? "text-green-500" : "text-red-500"}`}>
+                          {trans.type === "income" ? "+" : "-"}${Math.abs(trans.amount).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openEditDialog(trans)}
+                              disabled={!hasEnterpriseAccess}
+                              className="h-8 w-8 p-0"
+                              data-testid={`edit-trans-${trans.id}`}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteTransaction(trans.id)}
+                              disabled={!hasEnterpriseAccess}
+                              className="h-8 w-8 p-0 hover:bg-red-500/10 hover:text-red-500"
+                              data-testid={`delete-trans-${trans.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {!hasEnterpriseAccess && (
+                <p className="text-xs text-muted-foreground mt-4 flex items-center gap-2 px-1">
+                  <Lock className="h-3 w-3" />
+                  Upgrade to Enterprise to edit or delete transactions
+                </p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
 
       {/* Add Transaction Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Add Transaction</DialogTitle>
           </DialogHeader>
@@ -501,6 +509,7 @@ const BookkeepingPage = () => {
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="e.g., AWS Hosting"
+                className="bg-muted/30"
                 data-testid="trans-description-input"
               />
             </div>
@@ -512,6 +521,7 @@ const BookkeepingPage = () => {
                   value={formData.amount}
                   onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                   placeholder="0.00"
+                  className="bg-muted/30"
                   data-testid="trans-amount-input"
                 />
               </div>
@@ -521,7 +531,7 @@ const BookkeepingPage = () => {
                   value={formData.type}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, type: v }))}
                 >
-                  <SelectTrigger data-testid="trans-type-select">
+                  <SelectTrigger className="bg-muted/30" data-testid="trans-type-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -538,7 +548,7 @@ const BookkeepingPage = () => {
                   value={formData.category}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
                 >
-                  <SelectTrigger data-testid="trans-category-select">
+                  <SelectTrigger className="bg-muted/30" data-testid="trans-category-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -556,6 +566,7 @@ const BookkeepingPage = () => {
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="bg-muted/30"
                   data-testid="trans-date-input"
                 />
               </div>
@@ -570,7 +581,7 @@ const BookkeepingPage = () => {
 
       {/* Edit Transaction Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Edit Transaction</DialogTitle>
           </DialogHeader>
@@ -580,6 +591,7 @@ const BookkeepingPage = () => {
               <Input
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                className="bg-muted/30"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -589,6 +601,7 @@ const BookkeepingPage = () => {
                   type="number"
                   value={formData.amount}
                   onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  className="bg-muted/30"
                 />
               </div>
               <div className="space-y-2">
@@ -597,7 +610,7 @@ const BookkeepingPage = () => {
                   value={formData.type}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, type: v }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-muted/30">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -614,7 +627,7 @@ const BookkeepingPage = () => {
                   value={formData.category}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-muted/30">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -632,6 +645,7 @@ const BookkeepingPage = () => {
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="bg-muted/30"
                 />
               </div>
             </div>

@@ -11,6 +11,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from "../components/ui/dialog";
+import {
+  AISection,
+  AIBulletList,
+  WhatThisMeansSection,
+  AILoadingState,
+  AIEmptyState,
+  RiskItem
+} from "../components/ui/ai-components";
 import { 
   FileText, 
   Upload, 
@@ -20,7 +28,10 @@ import {
   AlertTriangle,
   CheckCircle,
   FileIcon,
-  Loader2
+  Loader2,
+  Sparkles,
+  ListChecks,
+  Shield
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -156,7 +167,7 @@ const DocumentsPage = () => {
               <input
                 type="file"
                 className="hidden"
-                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt"
                 onChange={handleUpload}
                 data-testid="document-upload-input"
               />
@@ -167,62 +178,66 @@ const DocumentsPage = () => {
 
       {/* Documents Grid */}
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <AILoadingState message="Loading your documents..." />
       ) : filteredDocs.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="py-16 text-center">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-8 w-8 text-primary" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
-              No documents yet
-            </h3>
-            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-              Upload your first document to get AI-powered analysis, summaries, and risk identification.
-            </p>
-            <Button className="glow-button" asChild>
-              <label className="cursor-pointer">
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Document
-                <input
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                  onChange={handleUpload}
-                />
-              </label>
-            </Button>
+          <CardContent className="p-0">
+            <AIEmptyState
+              icon={FileText}
+              title="No documents yet"
+              description="Upload your first document to get AI-powered analysis, summaries, and risk identification."
+              action={
+                <Button className="glow-button" asChild>
+                  <label className="cursor-pointer">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Document
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt"
+                      onChange={handleUpload}
+                    />
+                  </label>
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDocs.map((doc) => (
-            <Card key={doc.id} className="card-hover" data-testid={`document-card-${doc.id}`}>
+            <Card key={doc.id} className="group hover:border-primary/50 transition-all duration-300" data-testid={`document-card-${doc.id}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-xl">
+                    <div className="h-11 w-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-xl group-hover:scale-105 transition-transform">
                       {getFileIcon(doc.file_type)}
                     </div>
                     <div className="min-w-0">
                       <CardTitle className="text-base truncate" title={doc.name}>
                         {doc.name}
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {new Date(doc.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
-                  <Badge variant={doc.analyzed ? "default" : "secondary"}>
-                    {doc.analyzed ? "Analyzed" : "Pending"}
+                  <Badge 
+                    variant={doc.analyzed ? "default" : "secondary"}
+                    className={doc.analyzed ? "bg-green-500/20 text-green-400 border-green-500/30" : ""}
+                  >
+                    {doc.analyzed ? (
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        Analyzed
+                      </span>
+                    ) : "Pending"}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
                 {doc.analyzed && doc.summary && (
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                  <p className="text-sm text-muted-foreground line-clamp-2 mb-4 leading-relaxed">
                     {doc.summary}
                   </p>
                 )}
@@ -236,11 +251,16 @@ const DocumentsPage = () => {
                       data-testid={`analyze-btn-${doc.id}`}
                     >
                       {analyzing === doc.id ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Analyzing...
+                        </>
                       ) : (
-                        <FileIcon className="mr-2 h-4 w-4" />
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Analyze with AI
+                        </>
                       )}
-                      Analyze
                     </Button>
                   ) : (
                     <Button
@@ -258,9 +278,10 @@ const DocumentsPage = () => {
                     size="sm"
                     variant="ghost"
                     onClick={() => handleDelete(doc.id)}
+                    className="hover:bg-red-500/10 hover:text-red-500"
                     data-testid={`delete-btn-${doc.id}`}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>
@@ -271,106 +292,94 @@ const DocumentsPage = () => {
 
       {/* View Analysis Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }}>
-              {selectedDoc?.name}
-            </DialogTitle>
-            <DialogDescription>
-              AI-powered document analysis
-            </DialogDescription>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-card z-10">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }} className="text-lg">
+                  {selectedDoc?.name}
+                </DialogTitle>
+                <DialogDescription className="text-xs mt-0.5">
+                  AI-powered document analysis
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           
           {selectedDoc && (
-            <div className="space-y-6 mt-4">
+            <div className="p-6 space-y-5">
               {/* Summary */}
-              <div>
-                <h4 className="font-semibold mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" />
-                  Summary
-                </h4>
-                <p className="text-muted-foreground text-sm bg-muted/30 p-4 rounded-lg">
+              <AISection 
+                title="Summary" 
+                icon={FileText}
+                iconColor="text-primary"
+              >
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   {selectedDoc.summary}
                 </p>
-              </div>
+              </AISection>
 
               {/* Simple Explanation */}
               {selectedDoc.simple_explanation && (
-                <div>
-                  <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    In Simple Terms
-                  </h4>
-                  <p className="text-muted-foreground text-sm bg-green-500/10 p-4 rounded-lg border border-green-500/20">
+                <AISection 
+                  title="In Simple Terms" 
+                  icon={CheckCircle}
+                  iconColor="text-green-500"
+                  variant="success"
+                >
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     {selectedDoc.simple_explanation}
                   </p>
-                </div>
+                </AISection>
               )}
 
               {/* Key Points */}
-              {selectedDoc.key_points && (
-                <div>
-                  <h4 className="font-semibold mb-2">Key Points</h4>
-                  <ul className="space-y-2">
-                    {selectedDoc.key_points.map((point, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <span className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary shrink-0 mt-0.5">
-                          {i + 1}
-                        </span>
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {selectedDoc.key_points && selectedDoc.key_points.length > 0 && (
+                <AISection 
+                  title="Key Points" 
+                  icon={ListChecks}
+                  iconColor="text-primary"
+                >
+                  <AIBulletList items={selectedDoc.key_points} variant="default" />
+                </AISection>
               )}
 
               {/* Risks */}
-              {selectedDoc.risks && (
-                <div>
-                  <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    Potential Risks
-                  </h4>
-                  <ul className="space-y-2">
+              {selectedDoc.risks && selectedDoc.risks.length > 0 && (
+                <AISection 
+                  title="Potential Risks" 
+                  icon={AlertTriangle}
+                  iconColor="text-amber-500"
+                  variant="warning"
+                >
+                  <div className="space-y-2">
                     {selectedDoc.risks.map((risk, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                        {risk}
-                      </li>
+                      <RiskItem key={i}>{risk}</RiskItem>
                     ))}
-                  </ul>
-                </div>
+                  </div>
+                </AISection>
               )}
 
               {/* Obligations */}
-              {selectedDoc.obligations && (
-                <div>
-                  <h4 className="font-semibold mb-2">Your Obligations</h4>
-                  <ul className="space-y-2">
-                    {selectedDoc.obligations.map((obligation, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                        {obligation}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {selectedDoc.obligations && selectedDoc.obligations.length > 0 && (
+                <AISection 
+                  title="Your Obligations" 
+                  icon={Shield}
+                  iconColor="text-primary"
+                >
+                  <AIBulletList 
+                    items={selectedDoc.obligations} 
+                    icon={CheckCircle}
+                    iconColor="text-primary"
+                  />
+                </AISection>
               )}
 
               {/* What This Means For You */}
-              {selectedDoc.what_this_means && (
-                <div>
-                  <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <span className="text-primary">💡</span>
-                    What This Means For You
-                  </h4>
-                  <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
-                    <p className="text-sm text-foreground">
-                      {selectedDoc.what_this_means}
-                    </p>
-                  </div>
-                </div>
-              )}
+              <WhatThisMeansSection content={selectedDoc.what_this_means} />
             </div>
           )}
         </DialogContent>

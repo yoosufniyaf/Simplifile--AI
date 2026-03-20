@@ -11,21 +11,58 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
+import { AILoadingState } from "../components/ui/ai-components";
 import { 
   BarChart3, 
   Download,
   Lock,
-  Loader2,
   TrendingUp,
   TrendingDown,
   FileText,
-  PieChart
+  Zap,
+  DollarSign,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight
 } from "lucide-react";
-import { PieChart as RechartsChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { PieChart as RechartsChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import axios from "axios";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+// Report Metric Card
+const ReportMetricCard = ({ label, value, sublabel, icon: Icon, color = "primary", size = "default" }) => {
+  const colors = {
+    primary: { bg: "bg-primary/10", border: "border-primary/20", text: "text-primary", iconBg: "bg-primary/20" },
+    green: { bg: "bg-green-500/10", border: "border-green-500/20", text: "text-green-500", iconBg: "bg-green-500/20" },
+    red: { bg: "bg-red-500/10", border: "border-red-500/20", text: "text-red-500", iconBg: "bg-red-500/20" },
+    amber: { bg: "bg-amber-500/10", border: "border-amber-500/20", text: "text-amber-500", iconBg: "bg-amber-500/20" }
+  };
+
+  const c = colors[color];
+
+  return (
+    <Card className={`${c.bg} ${c.border}`}>
+      <CardContent className={size === "large" ? "p-6" : "p-5"}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">{label}</p>
+            <p className={`${size === "large" ? "text-3xl" : "text-2xl"} font-bold ${c.text}`} style={{ fontFamily: 'Outfit, sans-serif' }}>
+              {value}
+            </p>
+            {sublabel && <p className="text-xs text-muted-foreground mt-1">{sublabel}</p>}
+          </div>
+          {Icon && (
+            <div className={`${size === "large" ? "h-12 w-12" : "h-10 w-10"} rounded-xl flex items-center justify-center ${c.iconBg}`}>
+              <Icon className={`${size === "large" ? "h-6 w-6" : "h-5 w-5"} ${c.text}`} />
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const ReportsPage = () => {
   const { token, checkPlanAccess } = useAuth();
@@ -70,7 +107,7 @@ const ReportsPage = () => {
       );
       toast.success(response.data.message);
     } catch (error) {
-      toast.error("Export failed");
+      toast.error("Export failed. Please try again.");
     }
   };
 
@@ -87,16 +124,17 @@ const ReportsPage = () => {
   if (!hasEnterpriseAccess) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center" data-testid="reports-locked">
-        <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+        <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
           <Lock className="h-8 w-8 text-primary" />
         </div>
         <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
           Enterprise Feature
         </h2>
-        <p className="text-muted-foreground mb-6 max-w-md">
+        <p className="text-muted-foreground mb-6 max-w-md text-sm">
           Upgrade to Enterprise for auto-generated financial statements including Profit & Loss, Balance Sheet, and Cash Flow reports.
         </p>
         <Button className="glow-button" onClick={() => window.location.href = "/dashboard/settings"}>
+          <Zap className="mr-2 h-4 w-4" />
           Upgrade to Enterprise
         </Button>
       </div>
@@ -104,11 +142,7 @@ const ReportsPage = () => {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <AILoadingState message="Loading financial reports..." />;
   }
 
   return (
@@ -137,62 +171,53 @@ const ReportsPage = () => {
 
       {/* Reports Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="profit-loss" data-testid="tab-profit-loss">Profit & Loss</TabsTrigger>
-          <TabsTrigger value="balance-sheet" data-testid="tab-balance-sheet">Balance Sheet</TabsTrigger>
-          <TabsTrigger value="cash-flow" data-testid="tab-cash-flow">Cash Flow</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 max-w-md bg-muted/30">
+          <TabsTrigger value="profit-loss" data-testid="tab-profit-loss" className="data-[state=active]:bg-card">
+            P&L
+          </TabsTrigger>
+          <TabsTrigger value="balance-sheet" data-testid="tab-balance-sheet" className="data-[state=active]:bg-card">
+            Balance Sheet
+          </TabsTrigger>
+          <TabsTrigger value="cash-flow" data-testid="tab-cash-flow" className="data-[state=active]:bg-card">
+            Cash Flow
+          </TabsTrigger>
         </TabsList>
 
         {/* Profit & Loss */}
-        <TabsContent value="profit-loss" className="space-y-6">
+        <TabsContent value="profit-loss" className="space-y-6 mt-6">
           {profitLoss && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-green-500/10 border-green-500/20">
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3">
-                      <TrendingUp className="h-8 w-8 text-green-500" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Revenue</p>
-                        <p className="text-2xl font-bold text-green-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                          ${profitLoss.data.revenue?.toLocaleString() || 0}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-red-500/10 border-red-500/20">
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3">
-                      <TrendingDown className="h-8 w-8 text-red-500" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Total Expenses</p>
-                        <p className="text-2xl font-bold text-red-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                          ${profitLoss.data.total_expenses?.toLocaleString() || 0}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className={profitLoss.data.net_income >= 0 ? "bg-primary/10 border-primary/20" : "bg-amber-500/10 border-amber-500/20"}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3">
-                      <BarChart3 className={`h-8 w-8 ${profitLoss.data.net_income >= 0 ? "text-primary" : "text-amber-500"}`} />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Net Income</p>
-                        <p className={`text-2xl font-bold ${profitLoss.data.net_income >= 0 ? "text-primary" : "text-amber-500"}`} style={{ fontFamily: 'Outfit, sans-serif' }}>
-                          ${profitLoss.data.net_income?.toLocaleString() || 0}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <ReportMetricCard
+                  label="Revenue"
+                  value={`$${profitLoss.data.revenue?.toLocaleString() || 0}`}
+                  icon={TrendingUp}
+                  color="green"
+                  size="large"
+                />
+                <ReportMetricCard
+                  label="Total Expenses"
+                  value={`$${profitLoss.data.total_expenses?.toLocaleString() || 0}`}
+                  icon={TrendingDown}
+                  color="red"
+                  size="large"
+                />
+                <ReportMetricCard
+                  label="Net Income"
+                  value={`$${profitLoss.data.net_income?.toLocaleString() || 0}`}
+                  icon={DollarSign}
+                  color={profitLoss.data.net_income >= 0 ? "primary" : "amber"}
+                  size="large"
+                />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Expense Chart */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Expense Breakdown</CardTitle>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                      Expense Breakdown
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="h-64">
@@ -202,47 +227,76 @@ const ReportsPage = () => {
                             data={getExpenseChartData()}
                             cx="50%"
                             cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
+                            innerRadius={55}
+                            outerRadius={85}
                             fill="#8884d8"
                             dataKey="value"
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            paddingAngle={3}
                           >
                             {getExpenseChartData().map((_, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={COLORS[index % COLORS.length]}
+                                className="stroke-background"
+                                strokeWidth={2}
+                              />
                             ))}
                           </Pie>
                           <Tooltip
-                            contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                            contentStyle={{ 
+                              background: 'hsl(240 10% 7%)', 
+                              border: '1px solid hsl(240 5% 17%)', 
+                              borderRadius: '12px',
+                              padding: '12px'
+                            }}
                             formatter={(value) => [`$${value.toLocaleString()}`, 'Amount']}
                           />
                         </RechartsChart>
                       </ResponsiveContainer>
                     </div>
+                    {/* Legend */}
+                    <div className="flex flex-wrap justify-center gap-4 mt-4">
+                      {getExpenseChartData().map((entry, index) => (
+                        <div key={entry.name} className="flex items-center gap-2">
+                          <div 
+                            className="h-3 w-3 rounded-full" 
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                          <span className="text-xs text-muted-foreground">{entry.name}</span>
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
 
+                {/* Expenses Table */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Expenses by Category</CardTitle>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                      Expenses by Category
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Category</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {Object.entries(profitLoss.data.expenses || {}).map(([category, amount]) => (
-                          <TableRow key={category}>
-                            <TableCell className="capitalize">{category}</TableCell>
-                            <TableCell className="text-right">${amount.toLocaleString()}</TableCell>
+                    <div className="rounded-xl border border-border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="font-semibold">Category</TableHead>
+                            <TableHead className="text-right font-semibold">Amount</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {Object.entries(profitLoss.data.expenses || {}).map(([category, amount]) => (
+                            <TableRow key={category}>
+                              <TableCell className="capitalize font-medium">{category}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                ${amount.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -251,70 +305,76 @@ const ReportsPage = () => {
         </TabsContent>
 
         {/* Balance Sheet */}
-        <TabsContent value="balance-sheet" className="space-y-6">
+        <TabsContent value="balance-sheet" className="space-y-6 mt-6">
           {balanceSheet && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Assets */}
               <Card>
-                <CardHeader>
-                  <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Assets</CardTitle>
+                <CardHeader className="border-b border-border bg-muted/20">
+                  <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                    <Wallet className="h-4 w-4 text-primary" />
+                    Assets
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>Cash</TableCell>
-                        <TableCell className="text-right">${balanceSheet.data.assets?.cash?.toLocaleString() || 0}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Accounts Receivable</TableCell>
-                        <TableCell className="text-right">${balanceSheet.data.assets?.accounts_receivable?.toLocaleString() || 0}</TableCell>
-                      </TableRow>
-                      <TableRow className="font-bold">
-                        <TableCell>Total Assets</TableCell>
-                        <TableCell className="text-right text-primary">${balanceSheet.data.assets?.total_assets?.toLocaleString() || 0}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
+                <CardContent className="pt-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-muted-foreground">Cash</span>
+                      <span className="font-medium">${balanceSheet.data.assets?.cash?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-muted-foreground">Accounts Receivable</span>
+                      <span className="font-medium">${balanceSheet.data.assets?.accounts_receivable?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="border-t border-border pt-4 flex items-center justify-between">
+                      <span className="font-semibold">Total Assets</span>
+                      <span className="font-bold text-primary text-lg">${balanceSheet.data.assets?.total_assets?.toLocaleString() || 0}</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
+              {/* Liabilities */}
               <Card>
-                <CardHeader>
-                  <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Liabilities</CardTitle>
+                <CardHeader className="border-b border-border bg-muted/20">
+                  <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                    <ArrowDownRight className="h-4 w-4 text-red-500" />
+                    Liabilities
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>Accounts Payable</TableCell>
-                        <TableCell className="text-right">${balanceSheet.data.liabilities?.accounts_payable?.toLocaleString() || 0}</TableCell>
-                      </TableRow>
-                      <TableRow className="font-bold">
-                        <TableCell>Total Liabilities</TableCell>
-                        <TableCell className="text-right text-red-500">${balanceSheet.data.liabilities?.total_liabilities?.toLocaleString() || 0}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
+                <CardContent className="pt-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-muted-foreground">Accounts Payable</span>
+                      <span className="font-medium">${balanceSheet.data.liabilities?.accounts_payable?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="border-t border-border pt-4 flex items-center justify-between">
+                      <span className="font-semibold">Total Liabilities</span>
+                      <span className="font-bold text-red-500 text-lg">${balanceSheet.data.liabilities?.total_liabilities?.toLocaleString() || 0}</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
+              {/* Equity */}
               <Card>
-                <CardHeader>
-                  <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Equity</CardTitle>
+                <CardHeader className="border-b border-border bg-muted/20">
+                  <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                    <ArrowUpRight className="h-4 w-4 text-green-500" />
+                    Equity
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>Retained Earnings</TableCell>
-                        <TableCell className="text-right">${balanceSheet.data.equity?.retained_earnings?.toLocaleString() || 0}</TableCell>
-                      </TableRow>
-                      <TableRow className="font-bold">
-                        <TableCell>Total Equity</TableCell>
-                        <TableCell className="text-right text-green-500">${balanceSheet.data.equity?.total_equity?.toLocaleString() || 0}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
+                <CardContent className="pt-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-muted-foreground">Retained Earnings</span>
+                      <span className="font-medium">${balanceSheet.data.equity?.retained_earnings?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="border-t border-border pt-4 flex items-center justify-between">
+                      <span className="font-semibold">Total Equity</span>
+                      <span className="font-bold text-green-500 text-lg">${balanceSheet.data.equity?.total_equity?.toLocaleString() || 0}</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -322,63 +382,65 @@ const ReportsPage = () => {
         </TabsContent>
 
         {/* Cash Flow */}
-        <TabsContent value="cash-flow" className="space-y-6">
+        <TabsContent value="cash-flow" className="space-y-6 mt-6">
           {cashFlow && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-green-500/10 border-green-500/20">
-                  <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">Total Inflow</p>
-                    <p className="text-2xl font-bold text-green-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                      ${cashFlow.data.total_inflow?.toLocaleString() || 0}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-red-500/10 border-red-500/20">
-                  <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">Total Outflow</p>
-                    <p className="text-2xl font-bold text-red-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                      ${cashFlow.data.total_outflow?.toLocaleString() || 0}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card className={cashFlow.data.net_cash_flow >= 0 ? "bg-primary/10 border-primary/20" : "bg-amber-500/10 border-amber-500/20"}>
-                  <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">Net Cash Flow</p>
-                    <p className={`text-2xl font-bold ${cashFlow.data.net_cash_flow >= 0 ? "text-primary" : "text-amber-500"}`} style={{ fontFamily: 'Outfit, sans-serif' }}>
-                      ${cashFlow.data.net_cash_flow?.toLocaleString() || 0}
-                    </p>
-                  </CardContent>
-                </Card>
+                <ReportMetricCard
+                  label="Total Inflow"
+                  value={`$${cashFlow.data.total_inflow?.toLocaleString() || 0}`}
+                  icon={ArrowUpRight}
+                  color="green"
+                />
+                <ReportMetricCard
+                  label="Total Outflow"
+                  value={`$${cashFlow.data.total_outflow?.toLocaleString() || 0}`}
+                  icon={ArrowDownRight}
+                  color="red"
+                />
+                <ReportMetricCard
+                  label="Net Cash Flow"
+                  value={`$${cashFlow.data.net_cash_flow?.toLocaleString() || 0}`}
+                  icon={DollarSign}
+                  color={cashFlow.data.net_cash_flow >= 0 ? "primary" : "amber"}
+                />
               </div>
 
               <Card>
                 <CardHeader>
-                  <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Monthly Breakdown</CardTitle>
+                  <CardTitle className="text-base" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                    Monthly Breakdown
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Month</TableHead>
-                        <TableHead className="text-right">Inflow</TableHead>
-                        <TableHead className="text-right">Outflow</TableHead>
-                        <TableHead className="text-right">Net</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {Object.entries(cashFlow.data.monthly_breakdown || {}).map(([month, data]) => (
-                        <TableRow key={month}>
-                          <TableCell>{month}</TableCell>
-                          <TableCell className="text-right text-green-500">${data.inflow?.toLocaleString() || 0}</TableCell>
-                          <TableCell className="text-right text-red-500">${data.outflow?.toLocaleString() || 0}</TableCell>
-                          <TableCell className={`text-right font-medium ${(data.inflow - data.outflow) >= 0 ? "text-primary" : "text-amber-500"}`}>
-                            ${(data.inflow - data.outflow)?.toLocaleString() || 0}
-                          </TableCell>
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableHead className="font-semibold">Month</TableHead>
+                          <TableHead className="text-right font-semibold">Inflow</TableHead>
+                          <TableHead className="text-right font-semibold">Outflow</TableHead>
+                          <TableHead className="text-right font-semibold">Net</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {Object.entries(cashFlow.data.monthly_breakdown || {}).map(([month, data]) => (
+                          <TableRow key={month}>
+                            <TableCell className="font-medium">{month}</TableCell>
+                            <TableCell className="text-right text-green-500">
+                              +${data.inflow?.toLocaleString() || 0}
+                            </TableCell>
+                            <TableCell className="text-right text-red-500">
+                              -${data.outflow?.toLocaleString() || 0}
+                            </TableCell>
+                            <TableCell className={`text-right font-semibold ${(data.inflow - data.outflow) >= 0 ? "text-primary" : "text-amber-500"}`}>
+                              ${(data.inflow - data.outflow)?.toLocaleString() || 0}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </>
