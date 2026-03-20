@@ -356,6 +356,21 @@ const DocumentsPage = () => {
                   </ul>
                 </div>
               )}
+
+              {/* What This Means For You */}
+              {selectedDoc.what_this_means && (
+                <div>
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <span className="text-primary">💡</span>
+                    What This Means For You
+                  </h4>
+                  <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
+                    <p className="text-sm text-foreground">
+                      {selectedDoc.what_this_means}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

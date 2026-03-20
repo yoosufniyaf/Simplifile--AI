@@ -290,6 +290,44 @@ const TaxInsightsPage = () => {
             </Card>
           )}
 
+          {/* AI Tax Analysis */}
+          {latestInsight?.ai_analysis && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                  <span className="text-primary">🤖</span>
+                  Full AI Tax Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <div className="whitespace-pre-wrap text-muted-foreground text-sm leading-relaxed">
+                    {latestInsight.ai_analysis}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Total Deductible */}
+          {latestInsight?.total_deductible > 0 && (
+            <Card className="bg-green-500/10 border-green-500/20">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <DollarSign className="h-6 w-6 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Potentially Deductible</p>
+                    <p className="text-2xl font-bold text-green-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                      ${latestInsight.total_deductible.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Generated Date */}
           {latestInsight?.generated_at && (
             <p className="text-sm text-muted-foreground text-center">

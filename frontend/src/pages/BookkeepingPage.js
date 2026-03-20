@@ -382,6 +382,30 @@ const BookkeepingPage = () => {
         </div>
       )}
 
+      {/* AI Financial Analysis */}
+      {insights?.ai_analysis && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+              <span className="text-primary">🤖</span>
+              AI Financial Analysis
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-invert prose-sm max-w-none">
+              <div className="whitespace-pre-wrap text-muted-foreground text-sm leading-relaxed">
+                {insights.ai_analysis}
+              </div>
+            </div>
+            {insights.generated_by === "mock" && (
+              <p className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border">
+                💡 Connect your OpenAI API key for personalized AI-powered financial insights.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Transactions Table */}
       <Card>
         <CardHeader>

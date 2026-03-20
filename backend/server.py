@@ -17,6 +17,15 @@ import base64
 import io
 import csv
 
+# Import AI service
+from ai_service import (
+    analyze_document as ai_analyze_document,
+    chat_with_context,
+    categorize_transaction as ai_categorize_transaction,
+    generate_financial_insights,
+    generate_tax_insights
+)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -91,6 +100,7 @@ class DocumentResponse(BaseModel):
     risks: Optional[List[str]] = None
     obligations: Optional[List[str]] = None
     simple_explanation: Optional[str] = None
+    what_this_means: Optional[str] = None
     created_at: str
     analyzed: bool = False
 
@@ -152,6 +162,8 @@ class TaxInsightResponse(BaseModel):
     estimated_taxes: Dict[str, float]
     planning_insights: List[str]
     structure_advice: List[str]
+    ai_analysis: Optional[str] = None
+    total_deductible: Optional[float] = None
     generated_at: str
 
 # ==================== HELPER FUNCTIONS ====================
@@ -382,32 +394,30 @@ async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    # MOCKED AI Analysis - would use OpenAI GPT-4o here
-    mock_analysis = {
-        "summary": f"This document '{doc['name']}' appears to be a legal/business document. It contains standard terms and conditions typical of business agreements.",
-        "key_points": [
-            "The agreement establishes terms between parties",
-            "Payment terms and conditions are outlined",
-            "Termination clauses are included",
-            "Liability limitations are specified"
-        ],
-        "risks": [
-            "Auto-renewal clause may result in continued charges",
-            "Liability cap may limit your legal recourse",
-            "Jurisdiction clause specifies governing law"
-        ],
-        "obligations": [
-            "Maintain confidentiality of proprietary information",
-            "Make timely payments as specified",
-            "Provide notice before termination"
-        ],
-        "simple_explanation": "This is a standard business agreement that outlines what each party is responsible for. You'll need to pay on time, keep their information private, and follow the rules for ending the contract."
-    }
+    # Decode document content for analysis
+    try:
+        content_bytes = base64.b64decode(doc.get("content", ""))
+        # Try to decode as text
+        try:
+            document_text = content_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            # For PDFs/images, we'd need proper parsing - use filename as context for now
+            document_text = f"Document: {doc['name']} (binary content - PDF/image parsing would extract text here)"
+    except Exception:
+        document_text = f"Document: {doc['name']}"
+    
+    # Use AI service to analyze document with structured prompt
+    analysis = await ai_analyze_document(document_text, doc['name'])
     
     await db.documents.update_one(
         {"id": doc_id},
         {"$set": {
-            **mock_analysis,
+            "summary": analysis.get("summary"),
+            "key_points": analysis.get("key_points"),
+            "risks": analysis.get("risks"),
+            "obligations": analysis.get("obligations"),
+            "simple_explanation": analysis.get("simple_explanation"),
+            "what_this_means": analysis.get("what_this_means"),
             "analyzed": True
         }}
     )
@@ -416,11 +426,12 @@ async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
         id=doc_id,
         name=doc["name"],
         file_type=doc["file_type"],
-        summary=mock_analysis["summary"],
-        key_points=mock_analysis["key_points"],
-        risks=mock_analysis["risks"],
-        obligations=mock_analysis["obligations"],
-        simple_explanation=mock_analysis["simple_explanation"],
+        summary=analysis.get("summary"),
+        key_points=analysis.get("key_points"),
+        risks=analysis.get("risks"),
+        obligations=analysis.get("obligations"),
+        simple_explanation=analysis.get("simple_explanation"),
+        what_this_means=analysis.get("what_this_means"),
         created_at=doc["created_at"],
         analyzed=True
     )
@@ -455,21 +466,38 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.post("/chat", response_model=ChatResponse)
 async def send_chat_message(message: ChatMessage, user: dict = Depends(get_current_user)):
-    # MOCKED AI Chat Response - would use OpenAI GPT-4o here
-    context = ""
+    # Get document context if provided
+    context = None
+    document_name = None
+    
     if message.document_id:
         doc = await db.documents.find_one({"id": message.document_id, "user_id": user["id"]}, {"_id": 0})
-        if doc and doc.get("summary"):
-            context = f"Based on the document '{doc['name']}': "
+        if doc:
+            document_name = doc.get('name')
+            # Build context from document analysis
+            if doc.get("summary"):
+                context = f"""
+Document Summary: {doc.get('summary', '')}
+
+Key Points:
+{chr(10).join('- ' + p for p in (doc.get('key_points') or []))}
+
+Risks:
+{chr(10).join('- ' + r for r in (doc.get('risks') or []))}
+
+Obligations:
+{chr(10).join('- ' + o for o in (doc.get('obligations') or []))}
+"""
     
-    mock_response = f"{context}I understand you're asking about '{message.message}'. As your AI CFO assistant, I can help you understand legal documents, manage bookkeeping, and analyze financial data. This is a simulated response - connect your OpenAI API key for real AI responses."
+    # Use AI service with structured Copilot prompt
+    ai_response = await chat_with_context(message.message, context, document_name)
     
     chat_id = str(uuid.uuid4())
     chat_doc = {
         "id": chat_id,
         "user_id": user["id"],
         "user_message": message.message,
-        "ai_response": mock_response,
+        "ai_response": ai_response,
         "document_id": message.document_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -507,12 +535,13 @@ async def upload_financial_data(
             reader = csv.DictReader(io.StringIO(text_content))
             for row in reader:
                 trans_id = str(uuid.uuid4())
-                # Auto-categorize based on description (MOCKED)
-                category = categorize_transaction(row.get('description', ''))
+                description = row.get('description', row.get('Description', 'Unknown'))
+                # Use AI service for categorization with structured prompt
+                category = await ai_categorize_transaction(description)
                 transactions.append({
                     "id": trans_id,
                     "user_id": user["id"],
-                    "description": row.get('description', row.get('Description', 'Unknown')),
+                    "description": description,
                     "amount": float(row.get('amount', row.get('Amount', 0))),
                     "category": category,
                     "date": row.get('date', row.get('Date', datetime.now(timezone.utc).isoformat()[:10])),
@@ -528,21 +557,6 @@ async def upload_financial_data(
     except Exception as e:
         logger.error(f"Error parsing file: {e}")
         raise HTTPException(status_code=400, detail="Error parsing file")
-
-def categorize_transaction(description: str) -> str:
-    """MOCKED auto-categorization - would use AI in production"""
-    desc_lower = description.lower()
-    if any(word in desc_lower for word in ['aws', 'azure', 'google cloud', 'heroku', 'hosting']):
-        return 'hosting'
-    elif any(word in desc_lower for word in ['stripe', 'paypal', 'fee', 'commission']):
-        return 'fees'
-    elif any(word in desc_lower for word in ['ad', 'marketing', 'facebook', 'google ads', 'meta']):
-        return 'marketing'
-    elif any(word in desc_lower for word in ['software', 'saas', 'subscription', 'notion', 'slack']):
-        return 'software'
-    elif any(word in desc_lower for word in ['server', 'database', 'infrastructure']):
-        return 'infrastructure'
-    return 'other'
 
 @api_router.post("/bookkeeping/transactions", response_model=TransactionResponse)
 async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_current_user)):
@@ -627,16 +641,25 @@ async def get_financial_insights(user: dict = Depends(get_current_user)):
     total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
     total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
     
-    # MOCKED financial metrics
-    return {
+    # Calculate basic metrics
+    metrics = {
         "mrr": round(total_income / 12, 2) if total_income else 0,
-        "burn_rate": round(total_expenses / max(1, len(set(t["date"][:7] for t in transactions))), 2),
+        "burn_rate": round(total_expenses / max(1, len(set(t["date"][:7] for t in transactions if "date" in t))), 2),
         "runway_months": round(total_income / max(total_expenses, 1) * 12, 1) if total_expenses else 999,
-        "cac": round(sum(t["amount"] for t in transactions if t["category"] == "marketing") / max(1, len(transactions) // 10), 2),
+        "cac": round(sum(abs(t["amount"]) for t in transactions if t.get("category") == "marketing") / max(1, len(transactions) // 10), 2),
         "profit_margin": round((total_income - total_expenses) / max(total_income, 1) * 100, 2),
         "total_income": total_income,
         "total_expenses": total_expenses,
         "net_profit": total_income - total_expenses
+    }
+    
+    # Use AI service to generate insights with structured Financial Insights prompt
+    ai_insights = await generate_financial_insights(transactions, metrics)
+    
+    return {
+        **metrics,
+        "ai_analysis": ai_insights.get("ai_analysis"),
+        "generated_by": ai_insights.get("generated_by", "mock")
     }
 
 # ==================== REPORTS ROUTES (ENTERPRISE) ====================
@@ -851,35 +874,24 @@ async def analyze_tax_documents(
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
     
-    # MOCKED tax analysis - would use AI in production
     insight_id = str(uuid.uuid4())
     
+    # Get all transactions for context
     transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
-    total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
+    total_expenses = sum(abs(t["amount"]) for t in transactions if t.get("type") == "expense")
+    
+    # Use AI service to generate tax insights with structured prompt
+    ai_tax_insights = await generate_tax_insights(transactions, total_expenses)
     
     insight = {
         "id": insight_id,
         "user_id": user["id"],
-        "deductions": [
-            {"category": "software", "amount": sum(t["amount"] for t in transactions if t["category"] == "software"), "description": "Business software subscriptions"},
-            {"category": "marketing", "amount": sum(t["amount"] for t in transactions if t["category"] == "marketing"), "description": "Marketing and advertising"},
-            {"category": "hosting", "amount": sum(t["amount"] for t in transactions if t["category"] == "hosting"), "description": "Web hosting and cloud services"}
-        ],
-        "estimated_taxes": {
-            "federal": round(total_expenses * 0.22, 2),
-            "state": round(total_expenses * 0.05, 2),
-            "self_employment": round(total_expenses * 0.153, 2)
-        },
-        "planning_insights": [
-            "Consider maximizing retirement contributions to reduce taxable income",
-            "Track home office expenses if working from home",
-            "Keep records of all business-related travel expenses"
-        ],
-        "structure_advice": [
-            "Consider forming an LLC for liability protection",
-            "S-Corp election may reduce self-employment taxes if income is high",
-            "Quarterly estimated tax payments can help avoid penalties"
-        ],
+        "deductions": ai_tax_insights.get("deductions", []),
+        "estimated_taxes": ai_tax_insights.get("estimated_taxes", {}),
+        "planning_insights": ai_tax_insights.get("planning_insights", []),
+        "structure_advice": ai_tax_insights.get("structure_advice", []),
+        "ai_analysis": ai_tax_insights.get("ai_analysis"),
+        "total_deductible": ai_tax_insights.get("total_deductible", 0),
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
     
