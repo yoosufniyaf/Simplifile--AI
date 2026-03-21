@@ -74,6 +74,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+    "dependencies": {
+  "ajv": "^8.17.1",
+  "ajv-keywords": "^5.1.0"
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
