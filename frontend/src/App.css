@@ -32,3 +32,13 @@
         transform: rotate(360deg);
     }
 }
+a[href*="emergent"] {
+  display: none !important;
+}
+
+div:has(a[href*="emergent"]) {
+  display: none !important;
+}
+[class*="emergent"] {
+  display: none !important;
+}
