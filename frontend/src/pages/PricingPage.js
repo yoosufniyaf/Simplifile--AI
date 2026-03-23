@@ -14,7 +14,7 @@ const fallbackPlans = [
     name: "Basic Advisor",
     monthly_price: 9.99,
     annual_price: 89.91,
-    monthly_checkout_url: "https://whop.com/simplifile-ai/basic-advisor",
+    monthly_checkout_url: "https://whop.com/checkout/plan_DL9w3toar3XzA",
     annual_checkout_url: "https://whop.com/checkout/plan_AgyyfpvwIFcFZ",
     features: [
       "Document Simplifier",
@@ -28,7 +28,7 @@ const fallbackPlans = [
     name: "Premium",
     monthly_price: 29.99,
     annual_price: 269.91,
-    monthly_checkout_url: "https://whop.com/simplifile-ai/premium-0f-fbad",
+    monthly_checkout_url: "https://whop.com/checkout/plan_6HXlRqkubFfEV",
     annual_checkout_url: "https://whop.com/checkout/plan_OvGxhfTMuyd1c",
     features: [
       "Everything in Basic",
@@ -44,7 +44,7 @@ const fallbackPlans = [
     name: "Enterprise",
     monthly_price: 49.99,
     annual_price: 449.91,
-    monthly_checkout_url: "https://whop.com/simplifile-ai/enterprise-cb",
+    monthly_checkout_url: "https://whop.com/checkout/plan_ympaG6tpGe9k0",
     annual_checkout_url: "https://whop.com/checkout/plan_XZlUkZalqW22I",
     features: [
       "Everything in Premium",
@@ -124,7 +124,7 @@ const PricingPage = () => {
       : plan.monthly_checkout_url;
 
     if (checkoutUrl) {
-      window.open(checkoutUrl, "_blank");
+      window.open(checkoutUrl, "_blank", "noopener,noreferrer");
     } else {
       window.location.href = "/register";
     }
@@ -159,7 +159,10 @@ const PricingPage = () => {
 
       <section className="py-20 md:py-28">
         <div className="max-w-7xl mx-auto px-6 text-center">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
             <h1
               className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6"
               style={{ fontFamily: "Outfit, sans-serif" }}
@@ -168,11 +171,16 @@ const PricingPage = () => {
             </h1>
 
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              Choose the plan that fits your business. All plans include a 3-day free trial.
+              Choose the plan that fits your business. All plans include a
+              3-day free trial.
             </p>
 
             <div className="flex items-center justify-center gap-4 mb-12">
-              <span className={!isAnnual ? "text-foreground font-medium" : "text-muted-foreground"}>
+              <span
+                className={
+                  !isAnnual ? "text-foreground font-medium" : "text-muted-foreground"
+                }
+              >
                 Monthly
               </span>
 
@@ -182,7 +190,11 @@ const PricingPage = () => {
                 data-testid="billing-toggle"
               />
 
-              <span className={isAnnual ? "text-foreground font-medium" : "text-muted-foreground"}>
+              <span
+                className={
+                  isAnnual ? "text-foreground font-medium" : "text-muted-foreground"
+                }
+              >
                 Annual
               </span>
 
@@ -328,7 +340,10 @@ const PricingPage = () => {
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                 <FileText className="h-4 w-4 text-white" />
               </div>
-              <span className="font-semibold" style={{ fontFamily: "Outfit, sans-serif" }}>
+              <span
+                className="font-semibold"
+                style={{ fontFamily: "Outfit, sans-serif" }}
+              >
                 Simplifile AI
               </span>
             </div>
