@@ -32,25 +32,3 @@
         transform: rotate(360deg);
     }
 }
-a[href*="emergent"] {
-  display: none !important;
-}
-
-div:has(a[href*="emergent"]) {
-  display: none !important;
-}
-[class*="emergent"] {
-  display: none !important;
-}
-*[href*="emergent"],
-*[class*="emergent"],
-*[id*="emergent"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-body > div:last-child {
-  display: none !important;
-}
