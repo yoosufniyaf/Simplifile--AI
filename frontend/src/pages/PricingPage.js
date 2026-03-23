@@ -8,78 +8,92 @@ import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const fallbackPlans = [
+  {
+    id: "basic",
+    name: "Basic Advisor",
+    monthly_price: 9.99,
+    annual_price: 89.91,
+    features: [
+      "Document Simplifier",
+      "AI Copilot Chat",
+      "Upload PDFs & Images",
+      "Key Points & Risks Analysis",
+    ],
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    monthly_price: 29.99,
+    annual_price: 269.91,
+    features: [
+      "Everything in Basic",
+      "AI Bookkeeper Assistant",
+      "Transaction Categorization",
+      "P&L, Monthly Summary",
+      "MRR, Burn Rate, CAC Insights",
+    ],
+    popular: true,
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    monthly_price: 49.99,
+    annual_price: 449.91,
+    features: [
+      "Everything in Premium",
+      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
+      "Financial Statements Auto-Generated",
+      "Manual Editing & Custom Entries",
+      "PDF/CSV Export",
+      "AI Tax Insights",
+    ],
+  },
+];
+
+const normalizePlan = (plan) => ({
+  id: plan?.id || "plan",
+  name: plan?.name || "Plan",
+  monthly_price: Number(plan?.monthly_price ?? 0),
+  annual_price: Number(plan?.annual_price ?? 0),
+  features: Array.isArray(plan?.features) ? plan.features : [],
+  popular: Boolean(plan?.popular),
+});
+
 const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
-  const [plans, setPlans] = useState([]);
+  const [plans, setPlans] = useState(fallbackPlans);
 
   useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await axios.get(`${API}/subscription/plans`);
+        const apiPlans = Array.isArray(response?.data?.plans)
+          ? response.data.plans.map(normalizePlan)
+          : [];
+
+        setPlans(apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan));
+      } catch (error) {
+        console.error("Failed to fetch plans:", error);
+        setPlans(fallbackPlans.map(normalizePlan));
+      }
+    };
+
     fetchPlans();
   }, []);
 
-  const fetchPlans = async () => {
-    try {
-      const response = await axios.get(`${API}/subscription/plans`);
-      setPlans(response.data.plans);
-    } catch (error) {
-      console.error("Failed to fetch plans:", error);
-      // Fallback data
-      setPlans([
-        {
-          id: "basic",
-          name: "Basic Advisor",
-          monthly_price: 9.99,
-          annual_price: 89.91,
-          features: [
-            "Document Simplifier",
-            "AI Copilot Chat",
-            "Upload PDFs & Images",
-            "Key Points & Risks Analysis"
-          ]
-        },
-        {
-          id: "premium",
-          name: "Premium",
-          monthly_price: 29.99,
-          annual_price: 269.91,
-          features: [
-            "Everything in Basic",
-            "AI Bookkeeper Assistant",
-            "Transaction Categorization",
-            "P&L, Monthly Summary",
-            "MRR, Burn Rate, CAC Insights"
-          ],
-          popular: true
-        },
-        {
-          id: "enterprise",
-          name: "Enterprise",
-          monthly_price: 49.99,
-          annual_price: 449.91,
-          features: [
-            "Everything in Premium",
-            "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
-            "Financial Statements Auto-Generated",
-            "Manual Editing & Custom Entries",
-            "PDF/CSV Export",
-            "AI Tax Insights"
-          ]
-        }
-      ]);
-    }
-  };
-
   const getPrice = (plan) => {
     if (isAnnual) {
-      return (plan.annual_price / 12).toFixed(2);
+      return (Number(plan.annual_price || 0) / 12).toFixed(2);
     }
-    return plan.monthly_price.toFixed(2);
+    return Number(plan.monthly_price || 0).toFixed(2);
   };
 
   const getTotalPrice = (plan) => {
     if (isAnnual) {
-      return plan.annual_price.toFixed(2);
+      return Number(plan.annual_price || 0).toFixed(2);
     }
-    return (plan.monthly_price * 12).toFixed(2);
+    return (Number(plan.monthly_price || 0) * 12).toFixed(2);
   };
 
   const getPlanIcon = (planId) => {
@@ -95,14 +109,15 @@ const PricingPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
       <nav className="glass-nav sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="h-9 w-9 rounded-xl bg-primary glow-button flex items-center justify-center">
               <FileText className="h-5 w-5 text-white" />
             </div>
-            <span className="font-semibold text-xl" style={{ fontFamily: 'Outfit, sans-serif' }}>Simplifile AI</span>
+            <span className="font-semibold text-xl" style={{ fontFamily: "Outfit, sans-serif" }}>
+              Simplifile AI
+            </span>
           </Link>
           <div className="flex items-center gap-4">
             <Link to="/login">
@@ -115,21 +130,19 @@ const PricingPage = () => {
         </div>
       </nav>
 
-      {/* Header */}
       <section className="py-20 md:py-28">
         <div className="max-w-7xl mx-auto px-6 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <h1
+              className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6"
+              style={{ fontFamily: "Outfit, sans-serif" }}
+            >
               Simple, transparent pricing
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
               Choose the plan that fits your business. All plans include a 3-day free trial.
             </p>
 
-            {/* Billing Toggle */}
             <div className="flex items-center justify-center gap-4 mb-12">
               <span className={!isAnnual ? "text-foreground font-medium" : "text-muted-foreground"}>
                 Monthly
@@ -149,7 +162,6 @@ const PricingPage = () => {
               )}
             </div>
 
-            {/* Trial Notice */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-sm mb-12">
               <Check className="h-4 w-4 text-primary" />
               <span>3-day free trial • Cancel anytime</span>
@@ -158,7 +170,6 @@ const PricingPage = () => {
         </div>
       </section>
 
-      {/* Pricing Cards */}
       <section className="pb-24 md:pb-32">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -169,8 +180,8 @@ const PricingPage = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 className={`relative flex flex-col rounded-3xl border ${
-                  plan.popular 
-                    ? "border-primary bg-card shadow-xl shadow-primary/10" 
+                  plan.popular
+                    ? "border-primary bg-card shadow-xl shadow-primary/10"
                     : "border-border bg-card"
                 } p-8 transition-all hover:border-primary/50`}
                 data-testid={`pricing-card-${plan.id}`}
@@ -184,14 +195,22 @@ const PricingPage = () => {
                 )}
 
                 <div className="mb-6">
-                  <div className={`h-12 w-12 rounded-xl ${plan.popular ? "bg-primary" : "bg-primary/10"} flex items-center justify-center mb-4`}>
+                  <div
+                    className={`h-12 w-12 rounded-xl ${
+                      plan.popular ? "bg-primary" : "bg-primary/10"
+                    } flex items-center justify-center mb-4`}
+                  >
                     <div className={plan.popular ? "text-white" : "text-primary"}>
                       {getPlanIcon(plan.id)}
                     </div>
                   </div>
-                  <h3 className="text-xl font-semibold mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>{plan.name}</h3>
+                  <h3 className="text-xl font-semibold mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
+                    {plan.name}
+                  </h3>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>${getPrice(plan)}</span>
+                    <span className="text-4xl font-bold" style={{ fontFamily: "Outfit, sans-serif" }}>
+                      ${getPrice(plan)}
+                    </span>
                     <span className="text-muted-foreground">/month</span>
                   </div>
                   {isAnnual && (
@@ -202,7 +221,7 @@ const PricingPage = () => {
                 </div>
 
                 <ul className="space-y-3 mb-8 flex-1">
-                  {plan.features.map((feature, i) => (
+                  {(plan.features || []).map((feature, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                       <span className="text-muted-foreground">{feature}</span>
@@ -211,7 +230,7 @@ const PricingPage = () => {
                 </ul>
 
                 <Link to="/register">
-                  <Button 
+                  <Button
                     className={`w-full ${plan.popular ? "glow-button" : ""}`}
                     variant={plan.popular ? "default" : "outline"}
                     data-testid={`select-plan-${plan.id}`}
@@ -226,30 +245,29 @@ const PricingPage = () => {
         </div>
       </section>
 
-      {/* FAQ Section */}
       <section className="py-24 md:py-32 bg-card/30">
         <div className="max-w-3xl mx-auto px-6">
-          <h2 className="text-3xl font-semibold text-center mb-12" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <h2 className="text-3xl font-semibold text-center mb-12" style={{ fontFamily: "Outfit, sans-serif" }}>
             Frequently asked questions
           </h2>
           <div className="space-y-6">
             {[
               {
                 q: "How does the 3-day free trial work?",
-                a: "Start any plan with a full-featured 3-day trial. You won't be charged until the trial ends. Cancel anytime during the trial to avoid charges."
+                a: "Start any plan with a full-featured 3-day trial. You won't be charged until the trial ends. Cancel anytime during the trial to avoid charges.",
               },
               {
                 q: "Can I change plans later?",
-                a: "Yes! You can upgrade or downgrade your plan at any time. Changes take effect immediately, and we'll prorate any billing adjustments."
+                a: "Yes! You can upgrade or downgrade your plan at any time. Changes take effect immediately, and we'll prorate any billing adjustments.",
               },
               {
                 q: "What payment methods do you accept?",
-                a: "We accept all major credit cards through our secure payment processor. Annual subscriptions receive a 25% discount."
+                a: "We accept all major credit cards through our secure payment processor. Annual subscriptions receive a 25% discount.",
               },
               {
                 q: "Is my data secure?",
-                a: "Absolutely. We use bank-level encryption and never share your financial data. Your documents and transactions are stored securely."
-              }
+                a: "Absolutely. We use bank-level encryption and never share your financial data. Your documents and transactions are stored securely.",
+              },
             ].map((faq, i) => (
               <div key={i} className="rounded-xl border border-border bg-card p-6">
                 <h3 className="font-semibold mb-2">{faq.q}</h3>
@@ -260,7 +278,6 @@ const PricingPage = () => {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="border-t border-border py-12">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -268,11 +285,11 @@ const PricingPage = () => {
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                 <FileText className="h-4 w-4 text-white" />
               </div>
-              <span className="font-semibold" style={{ fontFamily: 'Outfit, sans-serif' }}>Simplifile AI</span>
+              <span className="font-semibold" style={{ fontFamily: "Outfit, sans-serif" }}>
+                Simplifile AI
+              </span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              © 2024 Simplifile AI. All rights reserved.
-            </p>
+            <p className="text-sm text-muted-foreground">© 2024 Simplifile AI. All rights reserved.</p>
           </div>
         </div>
       </footer>
