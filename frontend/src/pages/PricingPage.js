@@ -42,6 +42,7 @@ const fallbackPlans = [
     name: "Enterprise",
     monthly_price: 49.99,
     annual_price: 449.91,
+    checkout_url: "https://whop.com/simplifile-ai/enterprise-cb",
     features: [
       "Everything in Premium",
       "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
