@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -35,61 +34,6 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
- useEffect(() => {
-  const killEmergentBadge = () => {
-    document.querySelectorAll("*").forEach((el) => {
-      const text = (el.textContent || "").trim();
-      const href = el.getAttribute?.("href") || "";
-      const cls = typeof el.className === "string" ? el.className : "";
-      const id = el.id || "";
-      const style = window.getComputedStyle(el);
-
-      const looksLikeBadge =
-        text.includes("Made with Emergent") ||
-        href.includes("emergent") ||
-        cls.toLowerCase().includes("emergent") ||
-        id.toLowerCase().includes("emergent");
-
-      const fixedBottomRight =
-        style.position === "fixed" &&
-        (style.right === "0px" || parseInt(style.right || "0", 10) >= 0) &&
-        (style.bottom === "0px" || parseInt(style.bottom || "0", 10) >= 0);
-
-      if (looksLikeBadge || (fixedBottomRight && text.includes("Emergent"))) {
-        el.remove();
-      }
-    });
-
-    document.querySelectorAll("iframe").forEach((iframe) => {
-      const src = iframe.getAttribute("src") || "";
-      const title = iframe.getAttribute("title") || "";
-      if (
-        src.toLowerCase().includes("emergent") ||
-        title.toLowerCase().includes("emergent")
-      ) {
-        iframe.remove();
-      }
-    });
-  };
-
-  killEmergentBadge();
-
-  const observer = new MutationObserver(() => {
-    killEmergentBadge();
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  const interval = setInterval(killEmergentBadge, 500);
-
-  return () => {
-    observer.disconnect();
-    clearInterval(interval);
-  };
-}, []);
   return (
     <AuthProvider>
       <BrowserRouter>
