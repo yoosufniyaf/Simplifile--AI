@@ -14,6 +14,7 @@ const fallbackPlans = [
     name: "Basic Advisor",
     monthly_price: 9.99,
     annual_price: 89.91,
+    checkout_url: "https://whop.com/simplifile-ai/basic-advisor",
     features: [
       "Document Simplifier",
       "AI Copilot Chat",
