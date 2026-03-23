@@ -14,7 +14,8 @@ const fallbackPlans = [
     name: "Basic Advisor",
     monthly_price: 9.99,
     annual_price: 89.91,
-    checkout_url: "https://whop.com/simplifile-ai/basic-advisor",
+    monthly_checkout_url: "https://whop.com/simplifile-ai/basic-advisor",
+    annual_checkout_url: "https://whop.com/checkout/plan_AgyyfpvwIFcFZ",
     features: [
       "Document Simplifier",
       "AI Copilot Chat",
@@ -27,7 +28,8 @@ const fallbackPlans = [
     name: "Premium",
     monthly_price: 29.99,
     annual_price: 269.91,
-    checkout_url: "https://whop.com/simplifile-ai/premium-0f-fbad",
+    monthly_checkout_url: "https://whop.com/simplifile-ai/premium-0f-fbad",
+    annual_checkout_url: "https://whop.com/checkout/plan_OvGxhfTMuyd1c",
     features: [
       "Everything in Basic",
       "AI Bookkeeper Assistant",
@@ -42,7 +44,8 @@ const fallbackPlans = [
     name: "Enterprise",
     monthly_price: 49.99,
     annual_price: 449.91,
-    checkout_url: "https://whop.com/simplifile-ai/enterprise-cb",
+    monthly_checkout_url: "https://whop.com/simplifile-ai/enterprise-cb",
+    annual_checkout_url: "https://whop.com/checkout/plan_XZlUkZalqW22I",
     features: [
       "Everything in Premium",
       "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
@@ -61,12 +64,14 @@ const normalizePlan = (plan) => ({
   annual_price: Number(plan?.annual_price ?? 0),
   features: Array.isArray(plan?.features) ? plan.features : [],
   popular: Boolean(plan?.popular),
-  checkout_url: plan?.checkout_url || null,
+  monthly_checkout_url:
+    plan?.monthly_checkout_url || plan?.checkout_url || null,
+  annual_checkout_url: plan?.annual_checkout_url || null,
 });
 
 const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
-  const [plans, setPlans] = useState(fallbackPlans);
+  const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -76,7 +81,9 @@ const PricingPage = () => {
           ? response.data.plans.map(normalizePlan)
           : [];
 
-        setPlans(apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan));
+        setPlans(
+          apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan)
+        );
       } catch (error) {
         console.error("Failed to fetch plans:", error);
         setPlans(fallbackPlans.map(normalizePlan));
@@ -111,6 +118,18 @@ const PricingPage = () => {
     }
   };
 
+  const handlePlanClick = (plan) => {
+    const checkoutUrl = isAnnual
+      ? plan.annual_checkout_url
+      : plan.monthly_checkout_url;
+
+    if (checkoutUrl) {
+      window.open(checkoutUrl, "_blank");
+    } else {
+      window.location.href = "/register";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <nav className="glass-nav sticky top-0 z-50">
@@ -119,10 +138,14 @@ const PricingPage = () => {
             <div className="h-9 w-9 rounded-xl bg-primary glow-button flex items-center justify-center">
               <FileText className="h-5 w-5 text-white" />
             </div>
-            <span className="font-semibold text-xl" style={{ fontFamily: "Outfit, sans-serif" }}>
+            <span
+              className="font-semibold text-xl"
+              style={{ fontFamily: "Outfit, sans-serif" }}
+            >
               Simplifile AI
             </span>
           </Link>
+
           <div className="flex items-center gap-4">
             <Link to="/login">
               <Button variant="ghost">Login</Button>
@@ -134,51 +157,188 @@ const PricingPage = () => {
         </div>
       </nav>
 
-      <section className="py-20 md:py-28 text-center">
-        <h1 className="text-5xl font-bold mb-6">Simple, transparent pricing</h1>
-        <p className="text-muted-foreground mb-10">
-          Choose the plan that fits your business.
-        </p>
+      <section className="py-20 md:py-28">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <h1
+              className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6"
+              style={{ fontFamily: "Outfit, sans-serif" }}
+            >
+              Simple, transparent pricing
+            </h1>
 
-        <div className="flex justify-center gap-4 mb-12">
-          <span>Monthly</span>
-          <Switch checked={isAnnual} onCheckedChange={setIsAnnual} />
-          <span>Annual</span>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
+              Choose the plan that fits your business. All plans include a 3-day free trial.
+            </p>
+
+            <div className="flex items-center justify-center gap-4 mb-12">
+              <span className={!isAnnual ? "text-foreground font-medium" : "text-muted-foreground"}>
+                Monthly
+              </span>
+
+              <Switch
+                checked={isAnnual}
+                onCheckedChange={setIsAnnual}
+                data-testid="billing-toggle"
+              />
+
+              <span className={isAnnual ? "text-foreground font-medium" : "text-muted-foreground"}>
+                Annual
+              </span>
+
+              {isAnnual && (
+                <span className="bg-primary/20 text-primary text-sm px-3 py-1 rounded-full">
+                  Save 25%
+                </span>
+              )}
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-sm mb-12">
+              <Check className="h-4 w-4 text-primary" />
+              <span>3-day free trial • Cancel anytime</span>
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      <section className="pb-24">
-        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-3 gap-8">
-          {plans.map((plan, index) => (
-            <motion.div key={plan.id} className="border rounded-3xl p-8">
-              <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
-
-              <div className="text-4xl font-bold mb-4">
-                ${getPrice(plan)} /month
-              </div>
-
-              <ul className="mb-6">
-                {plan.features.map((f, i) => (
-                  <li key={i}>✔ {f}</li>
-                ))}
-              </ul>
-
-              <Button
-                className="w-full"
-                onClick={() => {
-                  if (plan.checkout_url) {
-                    window.open(plan.checkout_url, "_blank");
-                  } else {
-                    window.location.href = "/register";
-                  }
-                }}
+      <section className="pb-24 md:pb-32">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {plans.map((plan, index) => (
+              <motion.div
+                key={plan.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className={`relative flex flex-col rounded-3xl border ${
+                  plan.popular
+                    ? "border-primary bg-card shadow-xl shadow-primary/10"
+                    : "border-border bg-card"
+                } p-8 transition-all hover:border-primary/50`}
+                data-testid={`pricing-card-${plan.id}`}
               >
-                Start Free Trial
-              </Button>
-            </motion.div>
-          ))}
+                {plan.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <span className="bg-primary text-primary-foreground text-sm font-medium px-4 py-1.5 rounded-full">
+                      Most Popular
+                    </span>
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <div
+                    className={`h-12 w-12 rounded-xl ${
+                      plan.popular ? "bg-primary" : "bg-primary/10"
+                    } flex items-center justify-center mb-4`}
+                  >
+                    <div className={plan.popular ? "text-white" : "text-primary"}>
+                      {getPlanIcon(plan.id)}
+                    </div>
+                  </div>
+
+                  <h3
+                    className="text-xl font-semibold mb-2"
+                    style={{ fontFamily: "Outfit, sans-serif" }}
+                  >
+                    {plan.name}
+                  </h3>
+
+                  <div className="flex items-baseline gap-1">
+                    <span
+                      className="text-4xl font-bold"
+                      style={{ fontFamily: "Outfit, sans-serif" }}
+                    >
+                      ${getPrice(plan)}
+                    </span>
+                    <span className="text-muted-foreground">/month</span>
+                  </div>
+
+                  {isAnnual && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      ${getTotalPrice(plan)} billed annually
+                    </p>
+                  )}
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {(plan.features || []).map((feature, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  className={`w-full ${plan.popular ? "glow-button" : ""}`}
+                  variant={plan.popular ? "default" : "outline"}
+                  data-testid={`select-plan-${plan.id}`}
+                  onClick={() => handlePlanClick(plan)}
+                >
+                  Start Free Trial
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
+
+      <section className="py-24 md:py-32 bg-card/30">
+        <div className="max-w-3xl mx-auto px-6">
+          <h2
+            className="text-3xl font-semibold text-center mb-12"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
+            Frequently asked questions
+          </h2>
+
+          <div className="space-y-6">
+            {[
+              {
+                q: "How does the 3-day free trial work?",
+                a: "Start any plan with a full-featured 3-day trial. You won't be charged until the trial ends. Cancel anytime during the trial to avoid charges.",
+              },
+              {
+                q: "Can I change plans later?",
+                a: "Yes! You can upgrade or downgrade your plan at any time.",
+              },
+              {
+                q: "What payment methods do you accept?",
+                a: "We accept secure online payments through Whop. Annual subscriptions receive a 25% discount.",
+              },
+              {
+                q: "Is my data secure?",
+                a: "Absolutely. We use strong security practices to protect your documents and business information.",
+              },
+            ].map((faq, i) => (
+              <div key={i} className="rounded-xl border border-border bg-card p-6">
+                <h3 className="font-semibold mb-2">{faq.q}</h3>
+                <p className="text-muted-foreground">{faq.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border py-12">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                <FileText className="h-4 w-4 text-white" />
+              </div>
+              <span className="font-semibold" style={{ fontFamily: "Outfit, sans-serif" }}>
+                Simplifile AI
+              </span>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              © 2024 Simplifile AI. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
