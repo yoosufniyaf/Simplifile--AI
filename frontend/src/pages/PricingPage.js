@@ -27,6 +27,7 @@ const fallbackPlans = [
     name: "Premium",
     monthly_price: 29.99,
     annual_price: 269.91,
+    checkout_url: "https://whop.com/simplifile-ai/premium-0f-fbad",
     features: [
       "Everything in Basic",
       "AI Bookkeeper Assistant",
