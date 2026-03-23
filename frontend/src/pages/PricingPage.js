@@ -1,361 +1,192 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Button } from "../components/ui/button";
-import { Switch } from "../components/ui/switch";
-import { FileText, Check, ArrowRight, Zap, Crown } from "lucide-react";
-import axios from "axios";
+import React, { useState } from "react";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+export default function PricingPage() {
+  const [billing, setBilling] = useState("monthly");
 
-const fallbackPlans = [
-  {
-    id: "basic",
-    name: "Basic Advisor",
-    monthly_price: 9.99,
-    annual_price: 89.91,
-    monthly_checkout_url: "https://whop.com/checkout/plan_DL9w3toar3XzA",
-    annual_checkout_url: "https://whop.com/checkout/plan_AgyyfpvwIFcFZ",
-    features: [
-      "Document Simplifier",
-      "AI Copilot Chat",
-      "Upload PDFs & Images",
-      "Key Points & Risks Analysis",
+  const plans = {
+    monthly: [
+      {
+        name: "Basic",
+        price: "$9.99",
+        description: "Perfect for getting started with AI-powered financial help.",
+        features: [
+          "AI financial statement generation",
+          "Basic document assistance",
+          "Simple dashboard access",
+          "3-day free trial",
+        ],
+        buttonText: "Start Basic Trial",
+        link: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
+        popular: false,
+      },
+      {
+        name: "Premium",
+        price: "$19.99",
+        description: "Best for growing businesses that need deeper automation.",
+        features: [
+          "Everything in Basic",
+          "Advanced financial insights",
+          "More AI-powered support",
+          "Priority features",
+          "3-day free trial",
+        ],
+        buttonText: "Start Premium Trial",
+        link: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
+        popular: true,
+      },
+      {
+        name: "Enterprise",
+        price: "$49.99",
+        description: "For businesses that want the full Simplifile AI experience.",
+        features: [
+          "Everything in Premium",
+          "Full financial automation",
+          "Higher usage capacity",
+          "Premium support",
+          "3-day free trial",
+        ],
+        buttonText: "Start Enterprise Trial",
+        link: "https://whop.com/checkout/plan_HxIPDg1O5ClHn",
+        popular: false,
+      },
     ],
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    monthly_price: 29.99,
-    annual_price: 269.91,
-    monthly_checkout_url: "https://whop.com/checkout/plan_6HXlRqkubFfEV",
-    annual_checkout_url: "https://whop.com/checkout/plan_OvGxhfTMuyd1c",
-    features: [
-      "Everything in Basic",
-      "AI Bookkeeper Assistant",
-      "Transaction Categorization",
-      "P&L, Monthly Summary",
-      "MRR, Burn Rate, CAC Insights",
+    yearly: [
+      {
+        name: "Basic",
+        price: "$89.91",
+        description: "Save more with annual billing for Basic.",
+        features: [
+          "AI financial statement generation",
+          "Basic document assistance",
+          "Simple dashboard access",
+          "3-day free trial",
+        ],
+        buttonText: "Start Basic Trial",
+        link: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
+        popular: false,
+      },
+      {
+        name: "Premium",
+        price: "$179.91",
+        description: "Save more with annual billing for Premium.",
+        features: [
+          "Everything in Basic",
+          "Advanced financial insights",
+          "More AI-powered support",
+          "Priority features",
+          "3-day free trial",
+        ],
+        buttonText: "Start Premium Trial",
+        link: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
+        popular: true,
+      },
+      {
+        name: "Enterprise",
+        price: "$449.91",
+        description: "Save more with annual billing for Enterprise.",
+        features: [
+          "Everything in Premium",
+          "Full financial automation",
+          "Higher usage capacity",
+          "Premium support",
+          "3-day free trial",
+        ],
+        buttonText: "Start Enterprise Trial",
+        link: "https://whop.com/checkout/plan_1nnO8tkh9GCCd",
+        popular: false,
+      },
     ],
-    popular: true,
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    monthly_price: 49.99,
-    annual_price: 449.91,
-    monthly_checkout_url: "https://whop.com/checkout/plan_ympaG6tpGe9k0",
-    annual_checkout_url: "https://whop.com/checkout/plan_XZlUkZalqW22I",
-    features: [
-      "Everything in Premium",
-      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
-      "Financial Statements Auto-Generated",
-      "Manual Editing & Custom Entries",
-      "PDF/CSV Export",
-      "AI Tax Insights",
-    ],
-  },
-];
-
-const normalizePlan = (plan) => ({
-  id: plan?.id || "plan",
-  name: plan?.name || "Plan",
-  monthly_price: Number(plan?.monthly_price ?? 0),
-  annual_price: Number(plan?.annual_price ?? 0),
-  features: Array.isArray(plan?.features) ? plan.features : [],
-  popular: Boolean(plan?.popular),
-  monthly_checkout_url:
-    plan?.monthly_checkout_url || plan?.checkout_url || null,
-  annual_checkout_url: plan?.annual_checkout_url || null,
-});
-
-const PricingPage = () => {
-  const [isAnnual, setIsAnnual] = useState(false);
-  const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
-
-  useEffect(() => {
-    const fetchPlans = async () => {
-      try {
-        const response = await axios.get(`${API}/subscription/plans`);
-        const apiPlans = Array.isArray(response?.data?.plans)
-          ? response.data.plans.map(normalizePlan)
-          : [];
-
-        setPlans(
-          apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan)
-        );
-      } catch (error) {
-        console.error("Failed to fetch plans:", error);
-        setPlans(fallbackPlans.map(normalizePlan));
-      }
-    };
-
-    fetchPlans();
-  }, []);
-
-  const getPrice = (plan) => {
-    if (isAnnual) {
-      return (Number(plan.annual_price || 0) / 12).toFixed(2);
-    }
-    return Number(plan.monthly_price || 0).toFixed(2);
   };
 
-  const getTotalPrice = (plan) => {
-    if (isAnnual) {
-      return Number(plan.annual_price || 0).toFixed(2);
-    }
-    return (Number(plan.monthly_price || 0) * 12).toFixed(2);
-  };
-
-  const getPlanIcon = (planId) => {
-    switch (planId) {
-      case "enterprise":
-        return <Crown className="h-6 w-6" />;
-      case "premium":
-        return <Zap className="h-6 w-6" />;
-      default:
-        return <FileText className="h-6 w-6" />;
-    }
-  };
-
-  const handlePlanClick = (plan) => {
-    const checkoutUrl = isAnnual
-      ? plan.annual_checkout_url
-      : plan.monthly_checkout_url;
-
-    if (checkoutUrl) {
-      window.open(checkoutUrl, "_blank", "noopener,noreferrer");
-    } else {
-      window.location.href = "/register";
-    }
-  };
+  const currentPlans = plans[billing];
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-primary glow-button flex items-center justify-center">
-              <FileText className="h-5 w-5 text-white" />
-            </div>
-            <span
-              className="font-semibold text-xl"
-              style={{ fontFamily: "Outfit, sans-serif" }}
-            >
-              Simplifile AI
-            </span>
-          </Link>
+    <div className="min-h-screen bg-black text-white px-6 py-16">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold mb-4">
+            Simple pricing for every stage
+          </h1>
+          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+            Choose the plan that fits your business. Start with a 3-day free
+            trial.
+          </p>
 
-          <div className="flex items-center gap-4">
-            <Link to="/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
-            <Link to="/register">
-              <Button className="glow-button">Get Started</Button>
-            </Link>
+          <div className="mt-8 inline-flex bg-zinc-900 rounded-full p-1 border border-zinc-800">
+            <button
+              onClick={() => setBilling("monthly")}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition ${
+                billing === "monthly"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBilling("yearly")}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition ${
+                billing === "yearly"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Yearly
+            </button>
           </div>
         </div>
-      </nav>
 
-      <section className="py-20 md:py-28">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <h1
-              className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6"
-              style={{ fontFamily: "Outfit, sans-serif" }}
+        <div className="grid md:grid-cols-3 gap-8">
+          {currentPlans.map((plan) => (
+            <div
+              key={`${billing}-${plan.name}`}
+              className={`relative rounded-2xl border p-8 shadow-lg ${
+                plan.popular
+                  ? "border-blue-500 bg-zinc-900"
+                  : "border-zinc-800 bg-zinc-950"
+              }`}
             >
-              Simple, transparent pricing
-            </h1>
-
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              Choose the plan that fits your business. All plans include a
-              3-day free trial.
-            </p>
-
-            <div className="flex items-center justify-center gap-4 mb-12">
-              <span
-                className={
-                  !isAnnual ? "text-foreground font-medium" : "text-muted-foreground"
-                }
-              >
-                Monthly
-              </span>
-
-              <Switch
-                checked={isAnnual}
-                onCheckedChange={setIsAnnual}
-                data-testid="billing-toggle"
-              />
-
-              <span
-                className={
-                  isAnnual ? "text-foreground font-medium" : "text-muted-foreground"
-                }
-              >
-                Annual
-              </span>
-
-              {isAnnual && (
-                <span className="bg-primary/20 text-primary text-sm px-3 py-1 rounded-full">
-                  Save 25%
-                </span>
-              )}
-            </div>
-
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-sm mb-12">
-              <Check className="h-4 w-4 text-primary" />
-              <span>3-day free trial • Cancel anytime</span>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      <section className="pb-24 md:pb-32">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {plans.map((plan, index) => (
-              <motion.div
-                key={plan.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`relative flex flex-col rounded-3xl border ${
-                  plan.popular
-                    ? "border-primary bg-card shadow-xl shadow-primary/10"
-                    : "border-border bg-card"
-                } p-8 transition-all hover:border-primary/50`}
-                data-testid={`pricing-card-${plan.id}`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <span className="bg-primary text-primary-foreground text-sm font-medium px-4 py-1.5 rounded-full">
-                      Most Popular
-                    </span>
-                  </div>
-                )}
-
-                <div className="mb-6">
-                  <div
-                    className={`h-12 w-12 rounded-xl ${
-                      plan.popular ? "bg-primary" : "bg-primary/10"
-                    } flex items-center justify-center mb-4`}
-                  >
-                    <div className={plan.popular ? "text-white" : "text-primary"}>
-                      {getPlanIcon(plan.id)}
-                    </div>
-                  </div>
-
-                  <h3
-                    className="text-xl font-semibold mb-2"
-                    style={{ fontFamily: "Outfit, sans-serif" }}
-                  >
-                    {plan.name}
-                  </h3>
-
-                  <div className="flex items-baseline gap-1">
-                    <span
-                      className="text-4xl font-bold"
-                      style={{ fontFamily: "Outfit, sans-serif" }}
-                    >
-                      ${getPrice(plan)}
-                    </span>
-                    <span className="text-muted-foreground">/month</span>
-                  </div>
-
-                  {isAnnual && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      ${getTotalPrice(plan)} billed annually
-                    </p>
-                  )}
+              {plan.popular && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-semibold px-4 py-1 rounded-full">
+                  Most Popular
                 </div>
+              )}
 
-                <ul className="space-y-3 mb-8 flex-1">
-                  {(plan.features || []).map((feature, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                      <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                      <span className="text-muted-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+              <h2 className="text-2xl font-bold mb-2">{plan.name}</h2>
+              <p className="text-gray-400 mb-6">{plan.description}</p>
 
-                <Button
-                  className={`w-full ${plan.popular ? "glow-button" : ""}`}
-                  variant={plan.popular ? "default" : "outline"}
-                  data-testid={`select-plan-${plan.id}`}
-                  onClick={() => handlePlanClick(plan)}
-                >
-                  Start Free Trial
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-24 md:py-32 bg-card/30">
-        <div className="max-w-3xl mx-auto px-6">
-          <h2
-            className="text-3xl font-semibold text-center mb-12"
-            style={{ fontFamily: "Outfit, sans-serif" }}
-          >
-            Frequently asked questions
-          </h2>
-
-          <div className="space-y-6">
-            {[
-              {
-                q: "How does the 3-day free trial work?",
-                a: "Start any plan with a full-featured 3-day trial. You won't be charged until the trial ends. Cancel anytime during the trial to avoid charges.",
-              },
-              {
-                q: "Can I change plans later?",
-                a: "Yes! You can upgrade or downgrade your plan at any time.",
-              },
-              {
-                q: "What payment methods do you accept?",
-                a: "We accept secure online payments through Whop. Annual subscriptions receive a 25% discount.",
-              },
-              {
-                q: "Is my data secure?",
-                a: "Absolutely. We use strong security practices to protect your documents and business information.",
-              },
-            ].map((faq, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-6">
-                <h3 className="font-semibold mb-2">{faq.q}</h3>
-                <p className="text-muted-foreground">{faq.a}</p>
+              <div className="mb-6">
+                <span className="text-4xl font-bold">{plan.price}</span>
+                <span className="text-gray-400 ml-2">
+                  / {billing === "monthly" ? "month" : "year"}
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      <footer className="border-t border-border py-12">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <FileText className="h-4 w-4 text-white" />
-              </div>
-              <span
-                className="font-semibold"
-                style={{ fontFamily: "Outfit, sans-serif" }}
+              <ul className="space-y-3 mb-8">
+                {plan.features.map((feature, index) => (
+                  <li key={index} className="flex items-start gap-3 text-gray-300">
+                    <span className="text-blue-400 mt-0.5">✓</span>
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <a
+                href={plan.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`block w-full text-center py-3 px-6 rounded-xl font-semibold transition ${
+                  plan.popular
+                    ? "bg-blue-600 hover:bg-blue-500 text-white"
+                    : "bg-white text-black hover:bg-gray-200"
+                }`}
               >
-                Simplifile AI
-              </span>
+                {plan.buttonText}
+              </a>
             </div>
-
-            <p className="text-sm text-muted-foreground">
-              © 2024 Simplifile AI. All rights reserved.
-            </p>
-          </div>
+          ))}
         </div>
-      </footer>
+      </div>
     </div>
   );
-};
-
-export default PricingPage;
+}
