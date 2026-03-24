@@ -88,9 +88,7 @@ export const AuthProvider = ({ children }) => {
       password,
     });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     setToken(data?.session?.access_token || null);
     setUser(buildUserObject(data?.user || null));
@@ -110,9 +108,7 @@ export const AuthProvider = ({ children }) => {
       },
     });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     setToken(data?.session?.access_token || null);
     setUser(buildUserObject(data?.user || null));
@@ -123,9 +119,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     setToken(null);
     setUser(null);
@@ -141,9 +135,7 @@ export const AuthProvider = ({ children }) => {
       },
     });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     setUser(buildUserObject(data?.user || null));
 
