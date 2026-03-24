@@ -1,7 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import axios from "axios";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { supabase } from "../supabase";
 
 const AuthContext = createContext(null);
 
@@ -15,67 +13,145 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (token) {
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+  const buildUserObject = (authUser) => {
+    if (!authUser) return null;
 
-  const fetchUser = async () => {
+    return {
+      id: authUser.id,
+      email: authUser.email,
+      name: authUser.user_metadata?.name || "",
+      plan: authUser.user_metadata?.plan || "basic",
+      raw: authUser,
+    };
+  };
+
+  const refreshUser = async () => {
     try {
-      const response = await axios.get(`${API}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUser(response.data);
+      const {
+        data: { user: authUser },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error) throw error;
+
+      setUser(buildUserObject(authUser));
+      return authUser;
     } catch (error) {
-      console.error("Failed to fetch user:", error);
-      logout();
-    } finally {
-      setLoading(false);
+      console.error("Failed to refresh user:", error);
+      setUser(null);
+      return null;
     }
   };
+
+  useEffect(() => {
+    const loadSession = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) throw error;
+
+        setToken(session?.access_token || null);
+        setUser(buildUserObject(session?.user || null));
+      } catch (error) {
+        console.error("Failed to load session:", error);
+        setToken(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setToken(session?.access_token || null);
+      setUser(buildUserObject(session?.user || null));
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const login = async (email, password) => {
-    const response = await axios.post(`${API}/auth/login`, { email, password });
-    const { access_token, user: userData } = response.data;
-    localStorage.setItem("token", access_token);
-    setToken(access_token);
-    setUser(userData);
-    return userData;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    setToken(data?.session?.access_token || null);
+    setUser(buildUserObject(data?.user || null));
+
+    return { data, error: null };
   };
 
-  const register = async (email, password, name) => {
-    const response = await axios.post(`${API}/auth/register`, { email, password, name });
-    const { access_token, user: userData } = response.data;
-    localStorage.setItem("token", access_token);
-    setToken(access_token);
-    setUser(userData);
-    return userData;
+  const register = async (name, email, password) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          plan: "basic",
+        },
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    setToken(data?.session?.access_token || null);
+    setUser(buildUserObject(data?.user || null));
+
+    return { data, error: null };
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      throw error;
+    }
+
     setToken(null);
     setUser(null);
   };
 
   const updatePlan = async (plan, billingCycle) => {
-    const response = await axios.post(
-      `${API}/subscription/update`,
-      { plan, billing_cycle: billingCycle },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    setUser(prev => ({ ...prev, plan }));
-    return response.data;
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        ...user?.raw?.user_metadata,
+        name: user?.name || "",
+        plan,
+        billingCycle,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    setUser(buildUserObject(data?.user || null));
+
+    return { success: true, plan, billingCycle };
   };
 
   const getAuthHeader = () => ({
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
   });
 
   const checkPlanAccess = (requiredPlan) => {
@@ -86,18 +162,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      loading,
-      login,
-      register,
-      logout,
-      updatePlan,
-      getAuthHeader,
-      checkPlanAccess,
-      refreshUser: fetchUser
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        register,
+        logout,
+        updatePlan,
+        getAuthHeader,
+        checkPlanAccess,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
