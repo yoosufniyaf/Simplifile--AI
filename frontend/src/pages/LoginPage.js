@@ -17,12 +17,24 @@ const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      await login(email, password);
-      toast.success("Welcome back!");
-      navigate("/dashboard");
+      const { data, error } = await login(email, password);
+
+      if (error) {
+        toast.error(error.message || "Invalid credentials");
+        return;
+      }
+
+      if (data?.user || data?.session) {
+        toast.success("Welcome back!");
+        navigate("/dashboard");
+        return;
+      }
+
+      toast.error("Login failed");
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Invalid credentials");
+      toast.error(error.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -30,9 +42,11 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Left Panel - Form */}
       <div className="flex-1 flex flex-col justify-center px-8 py-12 lg:px-20">
-        <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-12 w-fit">
+        <Link
+          to="/"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-12 w-fit"
+        >
           <ArrowLeft className="h-4 w-4" />
           <span>Back to home</span>
         </Link>
@@ -42,10 +56,18 @@ const LoginPage = () => {
             <div className="h-10 w-10 rounded-xl bg-primary glow-button flex items-center justify-center">
               <FileText className="h-5 w-5 text-white" />
             </div>
-            <span className="font-semibold text-xl" style={{ fontFamily: 'Outfit, sans-serif' }}>Simplifile AI</span>
+            <span
+              className="font-semibold text-xl"
+              style={{ fontFamily: "Outfit, sans-serif" }}
+            >
+              Simplifile AI
+            </span>
           </Link>
 
-          <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <h1
+            className="text-3xl font-bold tracking-tight mb-2"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             Welcome back
           </h1>
           <p className="text-muted-foreground mb-8">
@@ -87,9 +109,9 @@ const LoginPage = () => {
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full h-12 glow-button" 
+            <Button
+              type="submit"
+              className="w-full h-12 glow-button"
               disabled={loading}
               data-testid="login-submit-btn"
             >
@@ -99,22 +121,29 @@ const LoginPage = () => {
 
           <p className="text-center text-muted-foreground mt-6">
             Don't have an account?{" "}
-            <Link to="/register" className="text-primary hover:underline" data-testid="register-link">
+            <Link
+              to="/register"
+              className="text-primary hover:underline"
+              data-testid="register-link"
+            >
               Start free trial
             </Link>
           </p>
         </div>
       </div>
 
-      {/* Right Panel - Visual */}
       <div className="hidden lg:flex flex-1 bg-card items-center justify-center p-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.15)_0%,transparent_70%)]" />
         <div className="relative text-center max-w-md">
-          <h2 className="text-3xl font-semibold mb-4" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <h2
+            className="text-3xl font-semibold mb-4"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             Your AI CFO awaits
           </h2>
           <p className="text-muted-foreground">
-            Simplify legal documents, automate bookkeeping, and get financial insights powered by AI.
+            Simplify legal documents, automate bookkeeping, and get financial
+            insights powered by AI.
           </p>
         </div>
       </div>
