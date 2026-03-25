@@ -4,70 +4,49 @@ import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Progress } from "../components/ui/progress";
-import {
-  FileText,
-  MessageSquare,
-  Calculator,
-  BarChart3,
-  Link2,
+import { 
+  FileText, 
+  MessageSquare, 
+  Calculator, 
+  BarChart3, 
+  Link2, 
   TrendingUp,
   TrendingDown,
   Clock,
   ArrowRight,
-  Zap,
+  Zap
 } from "lucide-react";
 import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const DashboardPage = () => {
-  const auth = useAuth() || {};
-  const { user, token, checkPlanAccess } = auth;
-
+  const { user, token, checkPlanAccess } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const safeCheckPlanAccess = (plan) => {
-    if (typeof checkPlanAccess !== "function") return true;
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
     try {
-      return checkPlanAccess(plan);
+      const response = await axios.get(`${API}/dashboard/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStats(response.data);
     } catch (error) {
-      console.error("checkPlanAccess failed:", error);
-      return true;
+      console.error("Failed to fetch stats:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        if (!token) {
-          setLoading(false);
-          return;
-        }
-
-        const response = await axios.get(`${API}/dashboard/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        setStats(response.data || {});
-      } catch (error) {
-        console.error("Failed to fetch stats:", error);
-        setStats({});
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, [token]);
-
   const getTrialDaysLeft = () => {
     if (!user?.trial_ends_at) return 0;
-
     const trialEnd = new Date(user.trial_ends_at);
     const now = new Date();
     const diff = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
-
     return Math.max(0, diff);
   };
 
@@ -91,17 +70,13 @@ const DashboardPage = () => {
       {/* Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ fontFamily: "Outfit, sans-serif" }}
-          >
-            Welcome back, {user?.name?.split(" ")?.[0] || "there"}
+          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
+            Welcome back, {user?.name?.split(" ")[0]}
           </h1>
           <p className="text-muted-foreground mt-1">
             Here's what's happening with your finances today.
           </p>
         </div>
-
         {user?.subscription_status === "trial" && (
           <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
             <Clock className="h-4 w-4 text-primary" />
@@ -115,8 +90,7 @@ const DashboardPage = () => {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {quickActions.map((action) => {
-          const hasAccess = safeCheckPlanAccess(action.plan);
-
+          const hasAccess = checkPlanAccess(action.plan);
           return (
             <Link
               key={action.label}
@@ -140,15 +114,10 @@ const DashboardPage = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Documents
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Documents</CardTitle>
           </CardHeader>
           <CardContent>
-            <div
-              className="text-3xl font-bold"
-              style={{ fontFamily: "Outfit, sans-serif" }}
-            >
+            <div className="text-3xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>
               {stats?.documents_count || 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Total uploaded</p>
@@ -157,34 +126,24 @@ const DashboardPage = () => {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              AI Chats
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">AI Chats</CardTitle>
           </CardHeader>
           <CardContent>
-            <div
-              className="text-3xl font-bold"
-              style={{ fontFamily: "Outfit, sans-serif" }}
-            >
+            <div className="text-3xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>
               {stats?.chats_count || 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Conversations</p>
           </CardContent>
         </Card>
 
-        {safeCheckPlanAccess("premium") && (
+        {checkPlanAccess("premium") && (
           <>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Income
-                </CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Income</CardTitle>
               </CardHeader>
               <CardContent>
-                <div
-                  className="text-3xl font-bold text-green-500"
-                  style={{ fontFamily: "Outfit, sans-serif" }}
-                >
+                <div className="text-3xl font-bold text-green-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
                   ${(stats?.total_income || 0).toLocaleString()}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-green-500 mt-1">
@@ -196,15 +155,10 @@ const DashboardPage = () => {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Expenses
-                </CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Expenses</CardTitle>
               </CardHeader>
               <CardContent>
-                <div
-                  className="text-3xl font-bold text-red-500"
-                  style={{ fontFamily: "Outfit, sans-serif" }}
-                >
+                <div className="text-3xl font-bold text-red-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
                   ${(stats?.total_expenses || 0).toLocaleString()}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-red-500 mt-1">
@@ -217,8 +171,8 @@ const DashboardPage = () => {
         )}
       </div>
 
-      {/* Upgrade Banner */}
-      {!safeCheckPlanAccess("premium") && (
+      {/* Feature Promotion for Basic Users */}
+      {!checkPlanAccess("premium") && (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -226,21 +180,15 @@ const DashboardPage = () => {
                 <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
                   <Zap className="h-6 w-6 text-primary" />
                 </div>
-
                 <div>
-                  <h3
-                    className="font-semibold text-lg"
-                    style={{ fontFamily: "Outfit, sans-serif" }}
-                  >
+                  <h3 className="font-semibold text-lg" style={{ fontFamily: 'Outfit, sans-serif' }}>
                     Unlock AI Bookkeeping
                   </h3>
                   <p className="text-muted-foreground text-sm mt-1">
-                    Upgrade to Premium for automated transaction categorization, P&L
-                    reports, and financial insights.
+                    Upgrade to Premium for automated transaction categorization, P&L reports, and financial insights.
                   </p>
                 </div>
               </div>
-
               <Link to="/dashboard/settings">
                 <Button className="glow-button">
                   Upgrade Now
@@ -252,18 +200,14 @@ const DashboardPage = () => {
         </Card>
       )}
 
-      {/* Bottom Grid */}
+      {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle
-              className="text-lg"
-              style={{ fontFamily: "Outfit, sans-serif" }}
-            >
+            <CardTitle className="text-lg" style={{ fontFamily: 'Outfit, sans-serif' }}>
               Getting Started
             </CardTitle>
           </CardHeader>
-
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
@@ -274,12 +218,9 @@ const DashboardPage = () => {
                 <p className="text-sm text-muted-foreground">Get AI-powered analysis</p>
               </div>
               <Link to="/dashboard/documents">
-                <Button size="sm" variant="outline">
-                  Start
-                </Button>
+                <Button size="sm" variant="outline">Start</Button>
               </Link>
             </div>
-
             <div className="flex items-center gap-4">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
                 2
@@ -289,57 +230,39 @@ const DashboardPage = () => {
                 <p className="text-sm text-muted-foreground">Ask questions, get answers</p>
               </div>
               <Link to="/dashboard/chat">
-                <Button size="sm" variant="outline">
-                  Start
-                </Button>
+                <Button size="sm" variant="outline">Start</Button>
               </Link>
             </div>
-
-            {safeCheckPlanAccess("premium") && (
+            {checkPlanAccess("premium") && (
               <div className="flex items-center gap-4">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
                   3
                 </div>
                 <div className="flex-1">
                   <p className="font-medium">Import transactions</p>
-                  <p className="text-sm text-muted-foreground">
-                    Upload bank statements or CSV
-                  </p>
+                  <p className="text-sm text-muted-foreground">Upload bank statements or CSV</p>
                 </div>
                 <Link to="/dashboard/bookkeeping">
-                  <Button size="sm" variant="outline">
-                    Start
-                  </Button>
+                  <Button size="sm" variant="outline">Start</Button>
                 </Link>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {safeCheckPlanAccess("enterprise") && (
+        {checkPlanAccess("enterprise") && (
           <Card>
             <CardHeader>
-              <CardTitle
-                className="text-lg"
-                style={{ fontFamily: "Outfit, sans-serif" }}
-              >
+              <CardTitle className="text-lg" style={{ fontFamily: 'Outfit, sans-serif' }}>
                 Integrations
               </CardTitle>
             </CardHeader>
-
             <CardContent>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-muted-foreground">Connected platforms</span>
-                <span className="font-medium">
-                  {stats?.integrations_connected || 0} / 4
-                </span>
+                <span className="font-medium">{stats?.integrations_connected || 0} / 4</span>
               </div>
-
-              <Progress
-                value={(stats?.integrations_connected || 0) * 25}
-                className="h-2 mb-4"
-              />
-
+              <Progress value={(stats?.integrations_connected || 0) * 25} className="h-2 mb-4" />
               <Link to="/dashboard/integrations">
                 <Button variant="outline" className="w-full">
                   <Link2 className="mr-2 h-4 w-4" />
