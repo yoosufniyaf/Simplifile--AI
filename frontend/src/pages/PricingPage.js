@@ -66,31 +66,18 @@ const normalizePlan = (plan) => ({
   annual_price: Number(plan?.annual_price ?? 0),
   features: Array.isArray(plan?.features) ? plan.features : [],
   popular: Boolean(plan?.popular),
-  monthly_checkout_url:
-    plan?.monthly_checkout_url || plan?.checkout_url || null,
+  monthly_checkout_url: plan?.monthly_checkout_url || plan?.checkout_url || null,
   annual_checkout_url: plan?.annual_checkout_url || null,
 });
 
 const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
-  const [startingTrial, setStartingTrial] = useState(false);
   const [loadingPlans, setLoadingPlans] = useState(true);
 
   const navigate = useNavigate();
   const auth = useAuth() || {};
-  const { token, user, setUser } = auth;
-
-  useEffect(() => {
-    const alreadyHasAccess =
-      user &&
-      (user.subscription_status === "trial" ||
-        user.subscription_status === "active");
-
-    if (alreadyHasAccess) {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [user, navigate]);
+  const { token, user } = auth;
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -100,9 +87,7 @@ const PricingPage = () => {
           ? response.data.plans.map(normalizePlan)
           : [];
 
-        setPlans(
-          apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan)
-        );
+        setPlans(apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan));
       } catch (error) {
         console.error("Failed to fetch plans:", error);
         setPlans(fallbackPlans.map(normalizePlan));
@@ -139,62 +124,23 @@ const PricingPage = () => {
     }
   };
 
-  const handlePlanClick = async (plan) => {
+  const handlePlanClick = (plan) => {
     if (!token) {
       navigate("/register");
       return;
     }
 
-    setStartingTrial(true);
+    const checkoutUrl = isAnnual
+      ? plan?.annual_checkout_url
+      : plan?.monthly_checkout_url;
 
-    try {
-      const trialResponse = await axios.post(
-        `${API}/subscription/start-trial`,
-        {
-          plan_id: plan.id,
-          billing_cycle: isAnnual ? "annual" : "monthly",
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const updatedUser = {
-        ...user,
-        plan: plan.id,
-        billing_cycle: isAnnual ? "annual" : "monthly",
-        trial_started: trialResponse?.data?.trial_started ?? true,
-        trial_ends_at: trialResponse?.data?.trial_ends_at ?? null,
-        subscription_status: trialResponse?.data?.subscription_status ?? "trial",
-      };
-
-      if (typeof setUser === "function") {
-        setUser(updatedUser);
-      }
-
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-
-      toast.success("Free trial started");
-      navigate("/dashboard", { replace: true });
-    } catch (error) {
-      console.error("Failed to start trial:", error);
-      toast.error(
-        error?.response?.data?.detail || "Failed to start free trial"
-      );
-    } finally {
-      setStartingTrial(false);
+    if (!checkoutUrl) {
+      toast.error("Checkout link is missing for this plan");
+      return;
     }
-  };
 
-  if (
-    user &&
-    (user.subscription_status === "trial" ||
-      user.subscription_status === "active")
-  ) {
-    return null;
-  }
+    window.location.href = checkoutUrl;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -348,9 +294,8 @@ const PricingPage = () => {
                   variant={plan.popular ? "default" : "outline"}
                   data-testid={`select-plan-${plan.id}`}
                   onClick={() => handlePlanClick(plan)}
-                  disabled={startingTrial}
                 >
-                  {startingTrial ? "Starting Trial..." : "Start Free Trial"}
+                  Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </motion.div>
@@ -372,11 +317,11 @@ const PricingPage = () => {
             {[
               {
                 q: "How does the 3-day free trial work?",
-                a: "Start any plan with a full-featured 3-day trial. You won't be charged until the trial ends. Cancel anytime during the trial to avoid charges.",
+                a: "Start any plan with a full-featured 3-day trial. You will be taken to secure checkout to begin the trial.",
               },
               {
                 q: "Can I change plans later?",
-                a: "Yes! You can upgrade or downgrade your plan at any time.",
+                a: "Yes. You can upgrade or downgrade your plan later.",
               },
               {
                 q: "What payment methods do you accept?",
@@ -384,7 +329,7 @@ const PricingPage = () => {
               },
               {
                 q: "Is my data secure?",
-                a: "Absolutely. We use strong security practices to protect your documents and business information.",
+                a: "Yes. We use strong security practices to protect your documents and business information.",
               },
             ].map((faq, i) => (
               <div key={i} className="rounded-xl border border-border bg-card p-6">
