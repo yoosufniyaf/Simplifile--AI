@@ -28,7 +28,18 @@ const LoginPage = () => {
 
       if (data?.user || data?.session) {
         toast.success("Welcome back!");
-        navigate("/dashboard");
+
+        const subscriptionStatus = data?.user?.subscription_status;
+
+        if (
+          subscriptionStatus === "trial" ||
+          subscriptionStatus === "active"
+        ) {
+          navigate("/dashboard");
+        } else {
+          navigate("/pricing");
+        }
+
         return;
       }
 
@@ -120,7 +131,7 @@ const LoginPage = () => {
           </form>
 
           <p className="text-center text-muted-foreground mt-6">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               to="/register"
               className="text-primary hover:underline"
