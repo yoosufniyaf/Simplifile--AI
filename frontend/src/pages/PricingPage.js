@@ -59,16 +59,29 @@ const fallbackPlans = [
   },
 ];
 
-const normalizePlan = (plan) => ({
-  id: plan?.id || "plan",
-  name: plan?.name || "Plan",
-  monthly_price: Number(plan?.monthly_price ?? 0),
-  annual_price: Number(plan?.annual_price ?? 0),
-  features: Array.isArray(plan?.features) ? plan.features : [],
-  popular: Boolean(plan?.popular),
-  monthly_checkout_url: plan?.monthly_checkout_url || plan?.checkout_url || null,
-  annual_checkout_url: plan?.annual_checkout_url || null,
-});
+const normalizePlan = (plan) => {
+  const fallbackPlan = fallbackPlans.find((p) => p.id === plan?.id);
+
+  return {
+    id: plan?.id || fallbackPlan?.id || "plan",
+    name: plan?.name || fallbackPlan?.name || "Plan",
+    monthly_price: Number(plan?.monthly_price ?? fallbackPlan?.monthly_price ?? 0),
+    annual_price: Number(plan?.annual_price ?? fallbackPlan?.annual_price ?? 0),
+    features: Array.isArray(plan?.features)
+      ? plan.features
+      : fallbackPlan?.features || [],
+    popular: Boolean(plan?.popular ?? fallbackPlan?.popular),
+    monthly_checkout_url:
+      plan?.monthly_checkout_url ||
+      plan?.checkout_url ||
+      fallbackPlan?.monthly_checkout_url ||
+      null,
+    annual_checkout_url:
+      plan?.annual_checkout_url ||
+      fallbackPlan?.annual_checkout_url ||
+      null,
+  };
+};
 
 const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
@@ -77,7 +90,7 @@ const PricingPage = () => {
 
   const navigate = useNavigate();
   const auth = useAuth() || {};
-  const { token, user } = auth;
+  const { token } = auth;
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -130,17 +143,21 @@ const PricingPage = () => {
       return;
     }
 
+    const fallbackPlan = fallbackPlans.find((p) => p.id === plan.id);
+
     const checkoutUrl = isAnnual
-      ? plan?.annual_checkout_url
-      : plan?.monthly_checkout_url;
+      ? plan?.annual_checkout_url || fallbackPlan?.annual_checkout_url
+      : plan?.monthly_checkout_url || fallbackPlan?.monthly_checkout_url;
 
     if (!checkoutUrl) {
-      toast.error("Checkout link is missing for this plan");
+      toast.error(`Checkout link is missing for ${plan.name}`);
       return;
     }
 
     window.location.href = checkoutUrl;
   };
+
+  const displayPlans = loadingPlans ? fallbackPlans.map(normalizePlan) : plans;
 
   return (
     <div className="min-h-screen bg-background">
@@ -224,7 +241,7 @@ const PricingPage = () => {
       <section className="pb-24 md:pb-32">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {(loadingPlans ? fallbackPlans.map(normalizePlan) : plans).map((plan, index) => (
+            {displayPlans.map((plan, index) => (
               <motion.div
                 key={plan.id}
                 initial={{ opacity: 0, y: 20 }}
