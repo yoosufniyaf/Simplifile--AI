@@ -75,9 +75,22 @@ const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
   const [startingTrial, setStartingTrial] = useState(false);
+  const [loadingPlans, setLoadingPlans] = useState(true);
 
   const navigate = useNavigate();
-  const { token, user, setUser } = useAuth();
+  const auth = useAuth() || {};
+  const { token, user, setUser } = auth;
+
+  useEffect(() => {
+    const alreadyHasAccess =
+      user &&
+      (user.subscription_status === "trial" ||
+        user.subscription_status === "active");
+
+    if (alreadyHasAccess) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -93,6 +106,8 @@ const PricingPage = () => {
       } catch (error) {
         console.error("Failed to fetch plans:", error);
         setPlans(fallbackPlans.map(normalizePlan));
+      } finally {
+        setLoadingPlans(false);
       }
     };
 
@@ -135,7 +150,10 @@ const PricingPage = () => {
     try {
       const trialResponse = await axios.post(
         `${API}/subscription/start-trial`,
-        {},
+        {
+          plan_id: plan.id,
+          billing_cycle: isAnnual ? "annual" : "monthly",
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -147,9 +165,9 @@ const PricingPage = () => {
         ...user,
         plan: plan.id,
         billing_cycle: isAnnual ? "annual" : "monthly",
-        trial_started: trialResponse.data.trial_started,
-        trial_ends_at: trialResponse.data.trial_ends_at,
-        subscription_status: trialResponse.data.subscription_status,
+        trial_started: trialResponse?.data?.trial_started ?? true,
+        trial_ends_at: trialResponse?.data?.trial_ends_at ?? null,
+        subscription_status: trialResponse?.data?.subscription_status ?? "trial",
       };
 
       if (typeof setUser === "function") {
@@ -159,7 +177,7 @@ const PricingPage = () => {
       localStorage.setItem("user", JSON.stringify(updatedUser));
 
       toast.success("Free trial started");
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true });
     } catch (error) {
       console.error("Failed to start trial:", error);
       toast.error(
@@ -169,6 +187,14 @@ const PricingPage = () => {
       setStartingTrial(false);
     }
   };
+
+  if (
+    user &&
+    (user.subscription_status === "trial" ||
+      user.subscription_status === "active")
+  ) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -187,12 +213,20 @@ const PricingPage = () => {
           </Link>
 
           <div className="flex items-center gap-4">
-            <Link to="/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
-            <Link to="/register">
-              <Button className="glow-button">Get Started</Button>
-            </Link>
+            {!token ? (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost">Login</Button>
+                </Link>
+                <Link to="/register">
+                  <Button className="glow-button">Get Started</Button>
+                </Link>
+              </>
+            ) : (
+              <Link to="/dashboard">
+                <Button variant="ghost">Go to Dashboard</Button>
+              </Link>
+            )}
           </div>
         </div>
       </nav>
@@ -244,7 +278,7 @@ const PricingPage = () => {
       <section className="pb-24 md:pb-32">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {plans.map((plan, index) => (
+            {(loadingPlans ? fallbackPlans.map(normalizePlan) : plans).map((plan, index) => (
               <motion.div
                 key={plan.id}
                 initial={{ opacity: 0, y: 20 }}
