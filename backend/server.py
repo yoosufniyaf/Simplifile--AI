@@ -1,12 +1,11 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -16,6 +15,8 @@ import json
 import base64
 import io
 import csv
+
+from supabase import create_client, Client
 
 from ai_service import (
     analyze_document as ai_analyze_document,
@@ -28,9 +29,13 @@ from ai_service import (
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://vkdozabxivvtsmmbnfod.supabase.co")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
 
@@ -78,11 +83,6 @@ class TokenResponse(BaseModel):
 class PlanUpdate(BaseModel):
     plan: str
     billing_cycle: str = "monthly"
-
-class DocumentUpload(BaseModel):
-    name: str
-    content: str
-    file_type: str
 
 class DocumentResponse(BaseModel):
     id: str
@@ -161,6 +161,70 @@ class TaxInsightResponse(BaseModel):
 
 # ==================== HELPER FUNCTIONS ====================
 
+def table_select(
+    table_name: str,
+    filters: Optional[Dict[str, Any]] = None,
+    columns: str = "*",
+    order_by: Optional[str] = None,
+    ascending: bool = True,
+    limit: Optional[int] = None,
+):
+    query = supabase.table(table_name).select(columns)
+
+    if filters:
+        for key, value in filters.items():
+            if isinstance(value, dict):
+                if "gte" in value:
+                    query = query.gte(key, value["gte"])
+                if "lte" in value:
+                    query = query.lte(key, value["lte"])
+                if "in" in value and isinstance(value["in"], list):
+                    query = query.in_(key, value["in"])
+            elif value is None:
+                query = query.is_(key, "null")
+            else:
+                query = query.eq(key, value)
+
+    if order_by:
+        query = query.order(order_by, desc=not ascending)
+
+    if limit is not None:
+        query = query.limit(limit)
+
+    return query.execute().data or []
+
+def table_select_one(table_name: str, filters: Dict[str, Any], columns: str = "*"):
+    rows = table_select(table_name, filters=filters, columns=columns, limit=1)
+    return rows[0] if rows else None
+
+def table_insert_one(table_name: str, data: Dict[str, Any]):
+    result = supabase.table(table_name).insert(data).execute()
+    return (result.data or [None])[0]
+
+def table_insert_many(table_name: str, rows: List[Dict[str, Any]]):
+    if not rows:
+        return []
+    result = supabase.table(table_name).insert(rows).execute()
+    return result.data or []
+
+def table_update(table_name: str, filters: Dict[str, Any], data: Dict[str, Any]):
+    query = supabase.table(table_name).update(data)
+    for key, value in filters.items():
+        query = query.eq(key, value)
+    result = query.execute()
+    return result.data or []
+
+def table_delete(table_name: str, filters: Dict[str, Any]):
+    query = supabase.table(table_name).delete()
+    for key, value in filters.items():
+        query = query.eq(key, value)
+    result = query.execute()
+    return result.data or []
+
+def table_count(table_name: str, filters: Optional[Dict[str, Any]] = None) -> int:
+    rows = table_select(table_name, filters=filters, columns="id")
+    return len(rows)
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -184,6 +248,22 @@ def parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
     except Exception:
         return None
 
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+def normalize_list(value):
+    return value if isinstance(value, list) else []
+
+def infer_plan_from_text(*values) -> Optional[str]:
+    combined = " ".join(str(v).lower() for v in values if v)
+    if "enterprise" in combined:
+        return "enterprise"
+    if "premium" in combined:
+        return "premium"
+    if "basic" in combined:
+        return "basic"
+    return None
+
 async def normalize_user_access(user: dict) -> dict:
     updated_fields = {}
 
@@ -199,7 +279,7 @@ async def normalize_user_access(user: dict) -> dict:
             }
 
     if updated_fields:
-        await db.users.update_one({"id": user["id"]}, {"$set": updated_fields})
+        table_update("users", {"id": user["id"]}, updated_fields)
         user.update(updated_fields)
 
     return user
@@ -229,6 +309,18 @@ def check_plan_access(user: dict, required_plan: str) -> bool:
     required_level = plan_hierarchy.get(required_plan, 1)
     return user_level >= required_level
 
+def to_user_response(user: dict) -> UserResponse:
+    return UserResponse(
+        id=user["id"],
+        email=user["email"],
+        name=user["name"],
+        plan=user.get("plan", "basic"),
+        trial_started=bool(user.get("trial_started", False)),
+        trial_ends_at=user.get("trial_ends_at"),
+        subscription_status=user.get("subscription_status", "inactive"),
+        created_at=user["created_at"]
+    )
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -236,7 +328,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        user = table_select_one("users", {"id": user_id})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
@@ -247,39 +339,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-def to_user_response(user: dict) -> UserResponse:
-    return UserResponse(
-        id=user["id"],
-        email=user["email"],
-        name=user["name"],
-        plan=user.get("plan", "basic"),
-        trial_started=user.get("trial_started", False),
-        trial_ends_at=user.get("trial_ends_at"),
-        subscription_status=user.get("subscription_status", "inactive"),
-        created_at=user["created_at"]
-    )
-
-def infer_plan_from_text(*values) -> Optional[str]:
-    combined = " ".join(str(v).lower() for v in values if v)
-    if "enterprise" in combined:
-        return "enterprise"
-    if "premium" in combined:
-        return "premium"
-    if "basic" in combined:
-        return "basic"
-    return None
-
 # ==================== AUTH ROUTES ====================
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    existing = await db.users.find_one({"email": user_data.email})
+    existing = table_select_one("users", {"email": user_data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user_id = str(uuid.uuid4())
-    now_iso = datetime.now(timezone.utc).isoformat()
-
     user_doc = {
         "id": user_id,
         "email": user_data.email,
@@ -290,10 +358,10 @@ async def register(user_data: UserCreate):
         "trial_started": False,
         "trial_ends_at": None,
         "subscription_status": "inactive",
-        "created_at": now_iso
+        "created_at": now_iso()
     }
 
-    await db.users.insert_one(user_doc)
+    table_insert_one("users", user_doc)
     token = create_token(user_id)
 
     return TokenResponse(
@@ -303,7 +371,7 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    user = table_select_one("users", {"email": credentials.email})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -344,13 +412,14 @@ async def start_trial(user: dict = Depends(get_current_user)):
 
     trial_ends = datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)
 
-    await db.users.update_one(
+    table_update(
+        "users",
         {"id": user["id"]},
-        {"$set": {
+        {
             "trial_started": True,
             "trial_ends_at": trial_ends.isoformat(),
             "subscription_status": "trial"
-        }}
+        }
     )
 
     return {
@@ -366,15 +435,16 @@ async def update_subscription(plan_data: PlanUpdate, user: dict = Depends(get_cu
     if plan_data.plan not in valid_plans:
         raise HTTPException(status_code=400, detail="Invalid plan")
 
-    await db.users.update_one(
+    table_update(
+        "users",
         {"id": user["id"]},
-        {"$set": {
+        {
             "plan": plan_data.plan,
             "billing_cycle": plan_data.billing_cycle,
             "subscription_status": "active",
             "trial_started": True,
             "trial_ends_at": None
-        }}
+        }
     )
 
     return {"message": "Subscription updated", "plan": plan_data.plan}
@@ -464,7 +534,7 @@ async def whop_webhook(request: Request):
     if not customer_email:
         return {"status": "ignored", "reason": "no email found", "event_type": event_type}
 
-    user = await db.users.find_one({"email": customer_email}, {"_id": 0})
+    user = table_select_one("users", {"email": customer_email})
     if not user:
         return {"status": "ignored", "reason": "user not found", "email": customer_email, "event_type": event_type}
 
@@ -476,13 +546,14 @@ async def whop_webhook(request: Request):
     inferred_plan = infer_plan_from_text(plan_hint, event_text) or user.get("plan", "basic")
 
     if any(word in event_text for word in cancelled_keywords):
-        await db.users.update_one(
+        table_update(
+            "users",
             {"id": user["id"]},
-            {"$set": {
+            {
                 "subscription_status": "inactive",
                 "trial_started": False,
                 "trial_ends_at": None
-            }}
+            }
         )
         return {
             "status": "ok",
@@ -492,15 +563,16 @@ async def whop_webhook(request: Request):
         }
 
     if any(word in event_text for word in paid_keywords):
-        await db.users.update_one(
+        table_update(
+            "users",
             {"id": user["id"]},
-            {"$set": {
+            {
                 "plan": inferred_plan,
                 "billing_cycle": billing_cycle,
                 "subscription_status": "active",
                 "trial_started": True,
                 "trial_ends_at": None
-            }}
+            }
         )
         return {
             "status": "ok",
@@ -537,16 +609,16 @@ async def upload_document(
         "file_type": file.content_type or "application/octet-stream",
         "content": content_base64,
         "summary": None,
-        "key_points": None,
-        "risks": None,
-        "obligations": None,
+        "key_points": [],
+        "risks": [],
+        "obligations": [],
         "simple_explanation": None,
         "what_this_means": None,
         "analyzed": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now_iso()
     }
 
-    await db.documents.insert_one(doc)
+    table_insert_one("documents", doc)
 
     return DocumentResponse(
         id=doc_id,
@@ -560,7 +632,7 @@ async def upload_document(
 async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    doc = await db.documents.find_one({"id": doc_id, "user_id": user["id"]}, {"_id": 0})
+    doc = table_select_one("documents", {"id": doc_id, "user_id": user["id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -575,29 +647,28 @@ async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
 
     analysis = await ai_analyze_document(document_text, doc["name"])
 
-    await db.documents.update_one(
-        {"id": doc_id},
-        {"$set": {
-            "summary": analysis.get("summary"),
-            "key_points": analysis.get("key_points"),
-            "risks": analysis.get("risks"),
-            "obligations": analysis.get("obligations"),
-            "simple_explanation": analysis.get("simple_explanation"),
-            "what_this_means": analysis.get("what_this_means"),
-            "analyzed": True
-        }}
-    )
+    update_data = {
+        "summary": analysis.get("summary"),
+        "key_points": normalize_list(analysis.get("key_points")),
+        "risks": normalize_list(analysis.get("risks")),
+        "obligations": normalize_list(analysis.get("obligations")),
+        "simple_explanation": analysis.get("simple_explanation"),
+        "what_this_means": analysis.get("what_this_means"),
+        "analyzed": True
+    }
+
+    table_update("documents", {"id": doc_id}, update_data)
 
     return DocumentResponse(
         id=doc_id,
         name=doc["name"],
         file_type=doc["file_type"],
-        summary=analysis.get("summary"),
-        key_points=analysis.get("key_points"),
-        risks=analysis.get("risks"),
-        obligations=analysis.get("obligations"),
-        simple_explanation=analysis.get("simple_explanation"),
-        what_this_means=analysis.get("what_this_means"),
+        summary=update_data["summary"],
+        key_points=update_data["key_points"],
+        risks=update_data["risks"],
+        obligations=update_data["obligations"],
+        simple_explanation=update_data["simple_explanation"],
+        what_this_means=update_data["what_this_means"],
         created_at=doc["created_at"],
         analyzed=True
     )
@@ -606,10 +677,14 @@ async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
 async def get_documents(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    docs = await db.documents.find(
-        {"user_id": user["id"]},
-        {"_id": 0, "content": 0}
-    ).to_list(100)
+    docs = table_select(
+        "documents",
+        filters={"user_id": user["id"]},
+        columns="id,name,file_type,summary,key_points,risks,obligations,simple_explanation,what_this_means,created_at,analyzed",
+        order_by="created_at",
+        ascending=False,
+        limit=100
+    )
 
     return [DocumentResponse(**doc) for doc in docs]
 
@@ -617,9 +692,10 @@ async def get_documents(user: dict = Depends(get_current_user)):
 async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    doc = await db.documents.find_one(
+    doc = table_select_one(
+        "documents",
         {"id": doc_id, "user_id": user["id"]},
-        {"_id": 0, "content": 0}
+        columns="id,name,file_type,summary,key_points,risks,obligations,simple_explanation,what_this_means,created_at,analyzed"
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -629,8 +705,8 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    result = await db.documents.delete_one({"id": doc_id, "user_id": user["id"]})
-    if result.deleted_count == 0:
+    deleted = table_delete("documents", {"id": doc_id, "user_id": user["id"]})
+    if not deleted:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document deleted"}
 
@@ -644,7 +720,7 @@ async def send_chat_message(message: ChatMessage, user: dict = Depends(get_curre
     document_name = None
 
     if message.document_id:
-        doc = await db.documents.find_one({"id": message.document_id, "user_id": user["id"]}, {"_id": 0})
+        doc = table_select_one("documents", {"id": message.document_id, "user_id": user["id"]})
         if doc:
             document_name = doc.get("name")
             if doc.get("summary"):
@@ -670,22 +746,36 @@ Obligations:
         "user_message": message.message,
         "ai_response": ai_response,
         "document_id": message.document_id,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now_iso()
     }
 
-    await db.chats.insert_one(chat_doc)
+    table_insert_one("chats", chat_doc)
 
-    return ChatResponse(**{k: v for k, v in chat_doc.items() if k != "user_id"})
+    return ChatResponse(
+        id=chat_id,
+        user_message=chat_doc["user_message"],
+        ai_response=chat_doc["ai_response"],
+        document_id=chat_doc["document_id"],
+        created_at=chat_doc["created_at"]
+    )
 
 @api_router.get("/chat/history", response_model=List[ChatResponse])
 async def get_chat_history(document_id: Optional[str] = None, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    query = {"user_id": user["id"]}
+    filters = {"user_id": user["id"]}
     if document_id:
-        query["document_id"] = document_id
+        filters["document_id"] = document_id
 
-    chats = await db.chats.find(query, {"_id": 0, "user_id": 0}).sort("created_at", -1).to_list(50)
+    chats = table_select(
+        "chats",
+        filters=filters,
+        columns="id,user_message,ai_response,document_id,created_at",
+        order_by="created_at",
+        ascending=False,
+        limit=50
+    )
+
     return [ChatResponse(**chat) for chat in chats]
 
 # ==================== BOOKKEEPING ROUTES (PREMIUM+) ====================
@@ -719,15 +809,13 @@ async def upload_financial_data(
                     "description": description,
                     "amount": amount,
                     "category": category,
-                    "date": row.get("date", row.get("Date", datetime.now(timezone.utc).isoformat()[:10])),
+                    "date": row.get("date", row.get("Date", now_iso()[:10])),
                     "type": "expense" if amount < 0 else "income",
                     "source": "csv_import",
-                    "created_at": datetime.now(timezone.utc).isoformat()
+                    "created_at": now_iso()
                 })
 
-        if transactions:
-            await db.transactions.insert_many(transactions)
-
+        table_insert_many("transactions", transactions)
         return {"message": f"Imported {len(transactions)} transactions", "count": len(transactions)}
     except Exception as e:
         logger.error(f"Error parsing file: {e}")
@@ -750,11 +838,21 @@ async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_
         "date": trans.date,
         "type": trans.type,
         "source": "manual",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now_iso()
     }
 
-    await db.transactions.insert_one(trans_doc)
-    return TransactionResponse(**{k: v for k, v in trans_doc.items() if k != "user_id"})
+    table_insert_one("transactions", trans_doc)
+
+    return TransactionResponse(
+        id=trans_id,
+        description=trans.description,
+        amount=trans.amount,
+        category=trans.category,
+        date=trans.date,
+        type=trans.type,
+        source="manual",
+        created_at=trans_doc["created_at"]
+    )
 
 @api_router.get("/bookkeeping/transactions", response_model=List[TransactionResponse])
 async def get_transactions(
@@ -768,15 +866,25 @@ async def get_transactions(
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
 
-    query = {"user_id": user["id"]}
+    filters: Dict[str, Any] = {"user_id": user["id"]}
     if start_date:
-        query["date"] = {"$gte": start_date}
+        filters["date"] = {"gte": start_date}
     if end_date:
-        query.setdefault("date", {})["$lte"] = end_date
+        filters.setdefault("date", {})
+        if isinstance(filters["date"], dict):
+            filters["date"]["lte"] = end_date
     if category:
-        query["category"] = category
+        filters["category"] = category
 
-    transactions = await db.transactions.find(query, {"_id": 0, "user_id": 0}).sort("date", -1).to_list(500)
+    transactions = table_select(
+        "transactions",
+        filters=filters,
+        columns="id,description,amount,category,date,type,source,created_at",
+        order_by="date",
+        ascending=False,
+        limit=500
+    )
+
     return [TransactionResponse(**t) for t in transactions]
 
 @api_router.put("/bookkeeping/transactions/{trans_id}", response_model=TransactionResponse)
@@ -790,15 +898,21 @@ async def update_transaction(trans_id: str, update: TransactionUpdate, user: dic
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    result = await db.transactions.update_one(
+    updated = table_update(
+        "transactions",
         {"id": trans_id, "user_id": user["id"]},
-        {"$set": update_data}
+        update_data
     )
 
-    if result.matched_count == 0:
+    if not updated:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    trans = await db.transactions.find_one({"id": trans_id}, {"_id": 0, "user_id": 0})
+    trans = table_select_one(
+        "transactions",
+        {"id": trans_id, "user_id": user["id"]},
+        columns="id,description,amount,category,date,type,source,created_at"
+    )
+
     return TransactionResponse(**trans)
 
 @api_router.delete("/bookkeeping/transactions/{trans_id}")
@@ -808,8 +922,8 @@ async def delete_transaction(trans_id: str, user: dict = Depends(get_current_use
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    result = await db.transactions.delete_one({"id": trans_id, "user_id": user["id"]})
-    if result.deleted_count == 0:
+    deleted = table_delete("transactions", {"id": trans_id, "user_id": user["id"]})
+    if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"message": "Transaction deleted"}
 
@@ -820,14 +934,14 @@ async def get_financial_insights(user: dict = Depends(get_current_user)):
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
 
-    transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
 
     total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
     total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
 
     metrics = {
         "mrr": round(total_income / 12, 2) if total_income else 0,
-        "burn_rate": round(total_expenses / max(1, len(set(t["date"][:7] for t in transactions if "date" in t))), 2),
+        "burn_rate": round(total_expenses / max(1, len(set(t["date"][:7] for t in transactions if t.get("date")))), 2) if transactions else 0,
         "runway_months": round(total_income / max(total_expenses, 1) * 12, 1) if total_expenses else 999,
         "cac": round(sum(abs(t["amount"]) for t in transactions if t.get("category") == "marketing") / max(1, len(transactions) // 10), 2),
         "profit_margin": round((total_income - total_expenses) / max(total_income, 1) * 100, 2),
@@ -853,7 +967,7 @@ async def get_profit_loss(period: str = "monthly", user: dict = Depends(get_curr
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
 
     income = sum(t["amount"] for t in transactions if t["type"] == "income")
     expenses_by_category = {}
@@ -872,7 +986,7 @@ async def get_profit_loss(period: str = "monthly", user: dict = Depends(get_curr
             "gross_profit": income - sum(expenses_by_category.values()),
             "net_income": income - sum(expenses_by_category.values())
         },
-        generated_at=datetime.now(timezone.utc).isoformat()
+        generated_at=now_iso()
     )
 
 @api_router.get("/reports/balance-sheet", response_model=FinancialReportResponse)
@@ -882,7 +996,7 @@ async def get_balance_sheet(user: dict = Depends(get_current_user)):
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
 
     total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
     total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
@@ -905,7 +1019,7 @@ async def get_balance_sheet(user: dict = Depends(get_current_user)):
                 "total_equity": total_income - total_expenses
             }
         },
-        generated_at=datetime.now(timezone.utc).isoformat()
+        generated_at=now_iso()
     )
 
 @api_router.get("/reports/cash-flow", response_model=FinancialReportResponse)
@@ -915,7 +1029,7 @@ async def get_cash_flow(user: dict = Depends(get_current_user)):
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
 
     monthly_data = {}
     for t in transactions:
@@ -936,7 +1050,7 @@ async def get_cash_flow(user: dict = Depends(get_current_user)):
             "total_outflow": sum(m["outflow"] for m in monthly_data.values()),
             "net_cash_flow": sum(m["inflow"] - m["outflow"] for m in monthly_data.values())
         },
-        generated_at=datetime.now(timezone.utc).isoformat()
+        generated_at=now_iso()
     )
 
 @api_router.get("/reports/export/{report_type}")
@@ -960,16 +1074,18 @@ async def get_integrations(user: dict = Depends(get_current_user)):
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    integrations = await db.integrations.find(
+    integrations = table_select(
+        "integrations",
         {"user_id": user["id"]},
-        {"_id": 0, "user_id": 0, "api_key": 0, "api_secret": 0}
-    ).to_list(20)
+        columns="id,platform,status,connected_at",
+        limit=20
+    )
 
     available = [
-        {"id": "shopify", "platform": "shopify", "status": "disconnected"},
-        {"id": "stripe", "platform": "stripe", "status": "disconnected"},
-        {"id": "paypal", "platform": "paypal", "status": "disconnected"},
-        {"id": "whop", "platform": "whop", "status": "disconnected"}
+        {"id": "shopify", "platform": "shopify", "status": "disconnected", "connected_at": None},
+        {"id": "stripe", "platform": "stripe", "status": "disconnected", "connected_at": None},
+        {"id": "paypal", "platform": "paypal", "status": "disconnected", "connected_at": None},
+        {"id": "whop", "platform": "whop", "status": "disconnected", "connected_at": None}
     ]
 
     connected_platforms = {i["platform"] for i in integrations}
@@ -994,25 +1110,25 @@ async def connect_integration(integration: IntegrationConnect, user: dict = Depe
     if integration.platform not in valid_platforms:
         raise HTTPException(status_code=400, detail="Invalid platform")
 
-    int_id = str(uuid.uuid4())
+    existing = table_select_one("integrations", {"user_id": user["id"], "platform": integration.platform})
+
     int_doc = {
-        "id": int_id,
+        "id": existing["id"] if existing else str(uuid.uuid4()),
         "user_id": user["id"],
         "platform": integration.platform,
         "api_key": integration.api_key,
         "api_secret": integration.api_secret,
         "status": "connected",
-        "connected_at": datetime.now(timezone.utc).isoformat()
+        "connected_at": now_iso()
     }
 
-    await db.integrations.update_one(
-        {"user_id": user["id"], "platform": integration.platform},
-        {"$set": int_doc},
-        upsert=True
-    )
+    if existing:
+        table_update("integrations", {"id": existing["id"]}, int_doc)
+    else:
+        table_insert_one("integrations", int_doc)
 
     return IntegrationResponse(
-        id=int_id,
+        id=int_doc["id"],
         platform=integration.platform,
         status="connected",
         connected_at=int_doc["connected_at"]
@@ -1025,8 +1141,8 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    result = await db.integrations.delete_one({"user_id": user["id"], "platform": platform})
-    if result.deleted_count == 0:
+    deleted = table_delete("integrations", {"user_id": user["id"], "platform": platform})
+    if not deleted:
         raise HTTPException(status_code=404, detail="Integration not found")
     return {"message": f"{platform} disconnected"}
 
@@ -1037,7 +1153,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    integration = await db.integrations.find_one({"user_id": user["id"], "platform": platform})
+    integration = table_select_one("integrations", {"user_id": user["id"], "platform": platform})
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not connected")
 
@@ -1048,14 +1164,14 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
             "description": f"{platform.title()} - Order #12345",
             "amount": 99.99,
             "category": "fees" if "fee" in platform else "other",
-            "date": datetime.now(timezone.utc).isoformat()[:10],
+            "date": now_iso()[:10],
             "type": "income",
             "source": platform,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": now_iso()
         }
     ]
 
-    await db.transactions.insert_many(mock_transactions)
+    table_insert_many("transactions", mock_transactions)
 
     return {"message": f"Synced {len(mock_transactions)} transactions from {platform}"}
 
@@ -1073,7 +1189,7 @@ async def analyze_tax_documents(
 
     insight_id = str(uuid.uuid4())
 
-    transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
     total_expenses = sum(abs(t["amount"]) for t in transactions if t.get("type") == "expense")
 
     ai_tax_insights = await generate_tax_insights(transactions, total_expenses)
@@ -1087,10 +1203,10 @@ async def analyze_tax_documents(
         "structure_advice": ai_tax_insights.get("structure_advice", []),
         "ai_analysis": ai_tax_insights.get("ai_analysis"),
         "total_deductible": ai_tax_insights.get("total_deductible", 0),
-        "generated_at": datetime.now(timezone.utc).isoformat()
+        "generated_at": now_iso()
     }
 
-    await db.tax_insights.insert_one(insight)
+    table_insert_one("tax_insights", insight)
 
     return TaxInsightResponse(**{k: v for k, v in insight.items() if k != "user_id"})
 
@@ -1101,10 +1217,14 @@ async def get_tax_insights(user: dict = Depends(get_current_user)):
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    insights = await db.tax_insights.find(
+    insights = table_select(
+        "tax_insights",
         {"user_id": user["id"]},
-        {"_id": 0, "user_id": 0}
-    ).sort("generated_at", -1).to_list(10)
+        columns="id,deductions,estimated_taxes,planning_insights,structure_advice,ai_analysis,total_deductible,generated_at",
+        order_by="generated_at",
+        ascending=False,
+        limit=10
+    )
 
     return [TaxInsightResponse(**i) for i in insights]
 
@@ -1114,8 +1234,8 @@ async def get_tax_insights(user: dict = Depends(get_current_user)):
 async def get_dashboard_stats(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    doc_count = await db.documents.count_documents({"user_id": user["id"]})
-    chat_count = await db.chats.count_documents({"user_id": user["id"]})
+    doc_count = table_count("documents", {"user_id": user["id"]})
+    chat_count = table_count("chats", {"user_id": user["id"]})
 
     stats = {
         "documents_count": doc_count,
@@ -1127,15 +1247,15 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
     }
 
     if check_plan_access(user, "premium"):
-        trans_count = await db.transactions.count_documents({"user_id": user["id"]})
+        trans_count = table_count("transactions", {"user_id": user["id"]})
         stats["transactions_count"] = trans_count
 
-        transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
+        transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
         stats["total_income"] = sum(t["amount"] for t in transactions if t["type"] == "income")
         stats["total_expenses"] = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
 
     if check_plan_access(user, "enterprise"):
-        int_count = await db.integrations.count_documents({"user_id": user["id"], "status": "connected"})
+        int_count = len(table_select("integrations", {"user_id": user["id"], "status": "connected"}, columns="id", limit=100))
         stats["integrations_connected"] = int_count
 
     return stats
@@ -1148,7 +1268,7 @@ async def root():
 
 @api_router.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "healthy", "timestamp": now_iso()}
 
 app.include_router(api_router)
 
@@ -1159,7 +1279,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
