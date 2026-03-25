@@ -7,8 +7,7 @@ import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { Switch } from "../components/ui/switch";
-import { 
-  Settings, 
+import {
   User,
   CreditCard,
   Bell,
@@ -17,22 +16,108 @@ import {
   Crown,
   Zap,
   FileText,
-  Loader2
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const fallbackPlans = [
+  {
+    id: "basic",
+    name: "Basic Advisor",
+    monthly_price: 9.99,
+    annual_price: 89.91,
+    monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
+    annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
+    features: [
+      "Document Simplifier",
+      "AI Copilot Chat",
+      "Upload PDFs & Images",
+      "Key Points & Risks Analysis",
+    ],
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    monthly_price: 29.99,
+    annual_price: 269.91,
+    monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
+    annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
+    features: [
+      "Everything in Basic",
+      "AI Bookkeeper Assistant",
+      "Transaction Categorization",
+      "P&L, Monthly Summary",
+      "MRR, Burn Rate, CAC Insights",
+    ],
+    popular: true,
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    monthly_price: 49.99,
+    annual_price: 449.91,
+    monthly_checkout_url: "https://whop.com/checkout/plan_HxIPDg1O5ClHn",
+    annual_checkout_url: "https://whop.com/checkout/plan_1nnO8tkh9GCCd",
+    features: [
+      "Everything in Premium",
+      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
+      "Financial Statements Auto-Generated",
+      "Manual Editing & Custom Entries",
+      "PDF/CSV Export",
+      "AI Tax Insights",
+    ],
+  },
+];
+
+const normalizePlan = (plan) => {
+  const fallbackPlan = fallbackPlans.find((p) => p.id === plan?.id);
+
+  return {
+    id: plan?.id || fallbackPlan?.id || "plan",
+    name: plan?.name || fallbackPlan?.name || "Plan",
+    monthly_price: Number(plan?.monthly_price ?? fallbackPlan?.monthly_price ?? 0),
+    annual_price: Number(plan?.annual_price ?? fallbackPlan?.annual_price ?? 0),
+    features: Array.isArray(plan?.features)
+      ? plan.features
+      : fallbackPlan?.features || [],
+    popular: Boolean(plan?.popular ?? fallbackPlan?.popular),
+    monthly_checkout_url:
+      plan?.monthly_checkout_url ||
+      plan?.checkout_url ||
+      fallbackPlan?.monthly_checkout_url ||
+      null,
+    annual_checkout_url:
+      plan?.annual_checkout_url ||
+      fallbackPlan?.annual_checkout_url ||
+      null,
+  };
+};
+
 const SettingsPage = () => {
-  const { user, token, updatePlan, refreshUser } = useAuth();
-  const [plans, setPlans] = useState([]);
+  const auth = useAuth() || {};
+  const { user, token } = auth;
+
+  const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
   const [isAnnual, setIsAnnual] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
   const [name, setName] = useState(user?.name || "");
 
   useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await axios.get(`${API}/subscription/plans`);
+        const apiPlans = Array.isArray(response?.data?.plans)
+          ? response.data.plans.map(normalizePlan)
+          : [];
+
+        setPlans(apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan));
+      } catch (error) {
+        console.error("Failed to fetch plans:", error);
+        setPlans(fallbackPlans.map(normalizePlan));
+      }
+    };
+
     fetchPlans();
   }, []);
 
@@ -40,35 +125,34 @@ const SettingsPage = () => {
     setName(user?.name || "");
   }, [user]);
 
-  const fetchPlans = async () => {
-    try {
-      const response = await axios.get(`${API}/subscription/plans`);
-      setPlans(response.data.plans);
-    } catch (error) {
-      console.error("Failed to fetch plans:", error);
-    }
-  };
-
-  const handlePlanChange = async (planId) => {
+  const handlePlanChange = (planId) => {
     if (planId === user?.plan) return;
-    
-    setLoading(true);
-    try {
-      await updatePlan(planId, isAnnual ? "annual" : "monthly");
-      toast.success(`Upgraded to ${planId} plan!`);
-      refreshUser();
-    } catch (error) {
-      toast.error("Failed to update plan");
-    } finally {
-      setLoading(false);
+
+    if (!token) {
+      toast.error("Please log in first");
+      return;
     }
+
+    const selectedPlan = plans.find((plan) => plan.id === planId);
+    const fallbackPlan = fallbackPlans.find((plan) => plan.id === planId);
+
+    const checkoutUrl = isAnnual
+      ? selectedPlan?.annual_checkout_url || fallbackPlan?.annual_checkout_url
+      : selectedPlan?.monthly_checkout_url || fallbackPlan?.monthly_checkout_url;
+
+    if (!checkoutUrl) {
+      toast.error("Checkout link is missing");
+      return;
+    }
+
+    window.location.href = checkoutUrl;
   };
 
   const getPrice = (plan) => {
     if (isAnnual) {
-      return (plan.annual_price / 12).toFixed(2);
+      return (Number(plan?.annual_price || 0) / 12).toFixed(2);
     }
-    return plan.monthly_price.toFixed(2);
+    return Number(plan?.monthly_price || 0).toFixed(2);
   };
 
   const getPlanIcon = (planId) => {
@@ -94,7 +178,10 @@ const SettingsPage = () => {
     <div className="space-y-8 max-w-4xl" data-testid="settings-page">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
+        <h1
+          className="text-3xl font-bold tracking-tight"
+          style={{ fontFamily: "Outfit, sans-serif" }}
+        >
           Settings
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -105,7 +192,10 @@ const SettingsPage = () => {
       {/* Profile Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <CardTitle
+            className="flex items-center gap-2"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             <User className="h-5 w-5" />
             Profile
           </CardTitle>
@@ -126,10 +216,12 @@ const SettingsPage = () => {
               <Input value={user?.email || ""} disabled />
             </div>
           </div>
+
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="capitalize">
               {user?.plan || "basic"} Plan
             </Badge>
+
             {user?.subscription_status === "trial" && (
               <Badge className="bg-primary/20 text-primary">
                 Trial • {getTrialDaysLeft()} days left
@@ -142,12 +234,16 @@ const SettingsPage = () => {
       {/* Subscription Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <CardTitle
+            className="flex items-center gap-2"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             <CreditCard className="h-5 w-5" />
             Subscription
           </CardTitle>
           <CardDescription>Manage your plan and billing</CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-6">
           {/* Billing Toggle */}
           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
@@ -155,15 +251,18 @@ const SettingsPage = () => {
               <span className={!isAnnual ? "font-medium" : "text-muted-foreground"}>
                 Monthly
               </span>
+
               <Switch
                 checked={isAnnual}
                 onCheckedChange={setIsAnnual}
                 data-testid="billing-cycle-toggle"
               />
+
               <span className={isAnnual ? "font-medium" : "text-muted-foreground"}>
                 Annual
               </span>
             </div>
+
             {isAnnual && (
               <Badge className="bg-green-500/20 text-green-400">Save 25%</Badge>
             )}
@@ -173,11 +272,13 @@ const SettingsPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {plans.map((plan) => {
               const isCurrentPlan = plan.id === user?.plan;
-              
+
               return (
-                <Card 
-                  key={plan.id} 
-                  className={`relative ${isCurrentPlan ? "border-primary bg-primary/5" : ""} ${plan.popular ? "border-primary/50" : ""}`}
+                <Card
+                  key={plan.id}
+                  className={`relative ${isCurrentPlan ? "border-primary bg-primary/5" : ""} ${
+                    plan.popular ? "border-primary/50" : ""
+                  }`}
                   data-testid={`plan-card-${plan.id}`}
                 >
                   {plan.popular && (
@@ -185,11 +286,19 @@ const SettingsPage = () => {
                       <Badge className="bg-primary text-white text-xs">Popular</Badge>
                     </div>
                   )}
+
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${isCurrentPlan ? "bg-primary text-white" : "bg-primary/10 text-primary"}`}>
+                      <div
+                        className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                          isCurrentPlan
+                            ? "bg-primary text-white"
+                            : "bg-primary/10 text-primary"
+                        }`}
+                      >
                         {getPlanIcon(plan.id)}
                       </div>
+
                       <div>
                         <p className="font-semibold">{plan.name}</p>
                         <p className="text-xs text-muted-foreground">
@@ -197,34 +306,34 @@ const SettingsPage = () => {
                         </p>
                       </div>
                     </div>
+
                     <ul className="space-y-1 mb-4">
-                      {plan.features.slice(0, 3).map((feature, i) => (
-                        <li key={i} className="text-xs text-muted-foreground flex items-start gap-1">
+                      {(plan.features || []).slice(0, 3).map((feature, i) => (
+                        <li
+                          key={i}
+                          className="text-xs text-muted-foreground flex items-start gap-1"
+                        >
                           <Check className="h-3 w-3 text-primary shrink-0 mt-0.5" />
                           <span className="line-clamp-1">{feature}</span>
                         </li>
                       ))}
-                      {plan.features.length > 3 && (
+
+                      {(plan.features || []).length > 3 && (
                         <li className="text-xs text-muted-foreground">
                           +{plan.features.length - 3} more features
                         </li>
                       )}
                     </ul>
+
                     <Button
                       size="sm"
                       className="w-full"
                       variant={isCurrentPlan ? "outline" : "default"}
-                      disabled={isCurrentPlan || loading}
+                      disabled={isCurrentPlan}
                       onClick={() => handlePlanChange(plan.id)}
                       data-testid={`select-plan-${plan.id}`}
                     >
-                      {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : isCurrentPlan ? (
-                        "Current Plan"
-                      ) : (
-                        "Upgrade"
-                      )}
+                      {isCurrentPlan ? "Current Plan" : "Upgrade"}
                     </Button>
                   </CardContent>
                 </Card>
@@ -241,33 +350,47 @@ const SettingsPage = () => {
       {/* Notifications Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <CardTitle
+            className="flex items-center gap-2"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             <Bell className="h-5 w-5" />
             Notifications
           </CardTitle>
           <CardDescription>Configure your notification preferences</CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">Email Notifications</p>
-              <p className="text-sm text-muted-foreground">Receive updates about your documents and reports</p>
+              <p className="text-sm text-muted-foreground">
+                Receive updates about your documents and reports
+              </p>
             </div>
             <Switch defaultChecked data-testid="email-notifications-toggle" />
           </div>
+
           <Separator />
+
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">Weekly Summary</p>
-              <p className="text-sm text-muted-foreground">Get a weekly overview of your financial activity</p>
+              <p className="text-sm text-muted-foreground">
+                Get a weekly overview of your financial activity
+              </p>
             </div>
             <Switch defaultChecked data-testid="weekly-summary-toggle" />
           </div>
+
           <Separator />
+
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">Trial Reminders</p>
-              <p className="text-sm text-muted-foreground">Notifications about your trial status</p>
+              <p className="text-sm text-muted-foreground">
+                Notifications about your trial status
+              </p>
             </div>
             <Switch defaultChecked data-testid="trial-reminders-toggle" />
           </div>
@@ -277,12 +400,16 @@ const SettingsPage = () => {
       {/* Security Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <CardTitle
+            className="flex items-center gap-2"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             <Shield className="h-5 w-5" />
             Security
           </CardTitle>
           <CardDescription>Manage your account security</CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -293,7 +420,9 @@ const SettingsPage = () => {
               Change
             </Button>
           </div>
+
           <Separator />
+
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">Two-Factor Authentication</p>
@@ -303,11 +432,15 @@ const SettingsPage = () => {
               Enable
             </Button>
           </div>
+
           <Separator />
+
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-destructive">Delete Account</p>
-              <p className="text-sm text-muted-foreground">Permanently delete your account and data</p>
+              <p className="text-sm text-muted-foreground">
+                Permanently delete your account and data
+              </p>
             </div>
             <Button variant="destructive" size="sm" data-testid="delete-account-btn">
               Delete
