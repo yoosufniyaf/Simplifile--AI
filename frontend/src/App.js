@@ -16,8 +16,9 @@ import SettingsPage from "./pages/SettingsPage";
 import PricingPage from "./pages/PricingPage";
 
 const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  
+  const { user, loading, token } = useAuth();
+
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -25,11 +26,22 @@ const ProtectedRoute = ({ children }) => {
       </div>
     );
   }
-  
-  if (!user) {
+
+  // Not logged in → go to login
+  if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
-  
+
+  // 🚨 THIS IS THE IMPORTANT FIX
+  // Logged in but NO trial or subscription → go to pricing
+  if (
+    user?.subscription_status !== "trial" &&
+    user?.subscription_status !== "active"
+  ) {
+    return <Navigate to="/pricing" replace />;
+  }
+
+  // Allowed
   return children;
 };
 
@@ -38,16 +50,21 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/pricing" element={<PricingPage />} />
-          
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }>
+
+          {/* Protected routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<DashboardPage />} />
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="chat" element={<ChatPage />} />
@@ -58,13 +75,14 @@ function App() {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
-        <Toaster 
-          position="top-right" 
+
+        <Toaster
+          position="top-right"
           toastOptions={{
             style: {
-              background: 'hsl(240 10% 7%)',
-              border: '1px solid hsl(240 5% 17%)',
-              color: 'hsl(0 0% 98%)',
+              background: "hsl(240 10% 7%)",
+              border: "1px solid hsl(240 5% 17%)",
+              color: "hsl(0 0% 98%)",
             },
           }}
         />
