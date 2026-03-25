@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
 import { FileText, Check, ArrowRight, Zap, Crown } from "lucide-react";
 import axios from "axios";
+import { useAuth } from "../context/AuthContext";
+import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -72,6 +74,10 @@ const normalizePlan = (plan) => ({
 const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
+  const [startingTrial, setStartingTrial] = useState(false);
+
+  const navigate = useNavigate();
+  const { token, user, setUser } = useAuth();
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -118,15 +124,49 @@ const PricingPage = () => {
     }
   };
 
-  const handlePlanClick = (plan) => {
-    const checkoutUrl = isAnnual
-      ? plan.annual_checkout_url
-      : plan.monthly_checkout_url;
+  const handlePlanClick = async (plan) => {
+    if (!token) {
+      navigate("/register");
+      return;
+    }
 
-    if (checkoutUrl) {
-      window.open(checkoutUrl, "_blank");
-    } else {
-      window.location.href = "/register";
+    setStartingTrial(true);
+
+    try {
+      const trialResponse = await axios.post(
+        `${API}/subscription/start-trial`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const updatedUser = {
+        ...user,
+        plan: plan.id,
+        billing_cycle: isAnnual ? "annual" : "monthly",
+        trial_started: trialResponse.data.trial_started,
+        trial_ends_at: trialResponse.data.trial_ends_at,
+        subscription_status: trialResponse.data.subscription_status,
+      };
+
+      if (typeof setUser === "function") {
+        setUser(updatedUser);
+      }
+
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+
+      toast.success("Free trial started");
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Failed to start trial:", error);
+      toast.error(
+        error?.response?.data?.detail || "Failed to start free trial"
+      );
+    } finally {
+      setStartingTrial(false);
     }
   };
 
@@ -274,8 +314,9 @@ const PricingPage = () => {
                   variant={plan.popular ? "default" : "outline"}
                   data-testid={`select-plan-${plan.id}`}
                   onClick={() => handlePlanClick(plan)}
+                  disabled={startingTrial}
                 >
-                  Start Free Trial
+                  {startingTrial ? "Starting Trial..." : "Start Free Trial"}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </motion.div>
