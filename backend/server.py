@@ -17,7 +17,6 @@ import base64
 import io
 import csv
 
-# Import AI service
 from ai_service import (
     analyze_document as ai_analyze_document,
     chat_with_context,
@@ -27,33 +26,26 @@ from ai_service import (
 )
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ["DB_NAME"]]
 
-# OpenAI API Key (placeholder - user will provide later)
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', 'sk-placeholder-key')
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
 
-# JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', 'simplifile-ai-secret-key-2024')
+JWT_SECRET = os.environ.get("JWT_SECRET", "simplifile-ai-secret-key-2024")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+TRIAL_DAYS = 3
 
-# Create the main app
 app = FastAPI(title="Simplifile AI API")
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
-
 security = HTTPBearer()
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -73,6 +65,7 @@ class UserResponse(BaseModel):
     email: str
     name: str
     plan: str
+    trial_started: bool = False
     trial_ends_at: Optional[str] = None
     subscription_status: str
     created_at: str
@@ -120,7 +113,7 @@ class TransactionCreate(BaseModel):
     amount: float
     category: str
     date: str
-    type: str  # income or expense
+    type: str
 
 class TransactionUpdate(BaseModel):
     description: Optional[str] = None
@@ -169,10 +162,10 @@ class TaxInsightResponse(BaseModel):
 # ==================== HELPER FUNCTIONS ====================
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 def create_token(user_id: str) -> str:
     expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
@@ -183,21 +176,61 @@ def create_token(user_id: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+def parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
     try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+async def normalize_user_access(user: dict) -> dict:
+    """
+    Keeps subscription/trial state clean.
+    If a trial expired, mark the user inactive.
+    """
+    updated_fields = {}
+
+    if user.get("subscription_status") == "trial":
+        trial_ends_at = parse_iso_datetime(user.get("trial_ends_at"))
+        now = datetime.now(timezone.utc)
+
+        if not trial_ends_at or trial_ends_at <= now:
+            updated_fields = {
+                "subscription_status": "inactive",
+                "trial_started": False,
+                "trial_ends_at": None
+            }
+
+    if updated_fields:
+        await db.users.update_one({"id": user["id"]}, {"$set": updated_fields})
+        user.update(updated_fields)
+
+    return user
+
+def has_feature_access(user: dict) -> bool:
+    """
+    Access is allowed only if:
+    - subscription_status is active, OR
+    - subscription_status is trial and the trial has not expired
+    """
+    status = user.get("subscription_status", "inactive")
+
+    if status == "active":
+        return True
+
+    if status == "trial":
+        trial_ends_at = parse_iso_datetime(user.get("trial_ends_at"))
+        return bool(trial_ends_at and trial_ends_at > datetime.now(timezone.utc))
+
+    return False
+
+def require_feature_access(user: dict):
+    if not has_feature_access(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Start your free trial or subscribe to access this feature"
+        )
 
 def check_plan_access(user: dict, required_plan: str) -> bool:
     plan_hierarchy = {"basic": 1, "premium": 2, "enterprise": 3}
@@ -205,19 +238,49 @@ def check_plan_access(user: dict, required_plan: str) -> bool:
     required_level = plan_hierarchy.get(required_plan, 1)
     return user_level >= required_level
 
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        user = await normalize_user_access(user)
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def to_user_response(user: dict) -> UserResponse:
+    return UserResponse(
+        id=user["id"],
+        email=user["email"],
+        name=user["name"],
+        plan=user.get("plan", "basic"),
+        trial_started=user.get("trial_started", False),
+        trial_ends_at=user.get("trial_ends_at"),
+        subscription_status=user.get("subscription_status", "inactive"),
+        created_at=user["created_at"]
+    )
+
 # ==================== AUTH ROUTES ====================
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    # Check if user exists
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create user with 3-day trial
+
     user_id = str(uuid.uuid4())
-    trial_ends = datetime.now(timezone.utc) + timedelta(days=3)
-    
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # IMPORTANT:
+    # New users do NOT get trial access automatically anymore.
     user_doc = {
         "id": user_id,
         "email": user_data.email,
@@ -225,26 +288,18 @@ async def register(user_data: UserCreate):
         "password_hash": hash_password(user_data.password),
         "plan": "basic",
         "billing_cycle": "monthly",
-        "trial_ends_at": trial_ends.isoformat(),
-        "subscription_status": "trial",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "trial_started": False,
+        "trial_ends_at": None,
+        "subscription_status": "inactive",
+        "created_at": now_iso
     }
-    
+
     await db.users.insert_one(user_doc)
-    
     token = create_token(user_id)
-    
+
     return TokenResponse(
         access_token=token,
-        user=UserResponse(
-            id=user_id,
-            email=user_data.email,
-            name=user_data.name,
-            plan="basic",
-            trial_ends_at=trial_ends.isoformat(),
-            subscription_status="trial",
-            created_at=user_doc["created_at"]
-        )
+        user=to_user_response(user_doc)
     )
 
 @api_router.post("/auth/login", response_model=TokenResponse)
@@ -252,55 +307,78 @@ async def login(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
     if not verify_password(credentials.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
+    user = await normalize_user_access(user)
     token = create_token(user["id"])
-    
+
     return TokenResponse(
         access_token=token,
-        user=UserResponse(
-            id=user["id"],
-            email=user["email"],
-            name=user["name"],
-            plan=user.get("plan", "basic"),
-            trial_ends_at=user.get("trial_ends_at"),
-            subscription_status=user.get("subscription_status", "trial"),
-            created_at=user["created_at"]
-        )
+        user=to_user_response(user)
     )
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
-    return UserResponse(
-        id=user["id"],
-        email=user["email"],
-        name=user["name"],
-        plan=user.get("plan", "basic"),
-        trial_ends_at=user.get("trial_ends_at"),
-        subscription_status=user.get("subscription_status", "trial"),
-        created_at=user["created_at"]
+    return to_user_response(user)
+
+# ==================== SUBSCRIPTION / TRIAL ROUTES ====================
+
+@api_router.post("/subscription/start-trial")
+async def start_trial(user: dict = Depends(get_current_user)):
+    # Already active subscription
+    if user.get("subscription_status") == "active":
+        return {
+            "message": "Subscription already active",
+            "trial_started": user.get("trial_started", False),
+            "trial_ends_at": user.get("trial_ends_at"),
+            "subscription_status": user.get("subscription_status")
+        }
+
+    # Already on an active trial
+    if has_feature_access(user) and user.get("subscription_status") == "trial":
+        return {
+            "message": "Trial already active",
+            "trial_started": user.get("trial_started", False),
+            "trial_ends_at": user.get("trial_ends_at"),
+            "subscription_status": user.get("subscription_status")
+        }
+
+    trial_ends = datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "trial_started": True,
+            "trial_ends_at": trial_ends.isoformat(),
+            "subscription_status": "trial"
+        }}
     )
 
-# ==================== SUBSCRIPTION ROUTES (MOCKED) ====================
+    return {
+        "message": "Free trial started",
+        "trial_started": True,
+        "trial_ends_at": trial_ends.isoformat(),
+        "subscription_status": "trial"
+    }
 
 @api_router.post("/subscription/update")
 async def update_subscription(plan_data: PlanUpdate, user: dict = Depends(get_current_user)):
     valid_plans = ["basic", "premium", "enterprise"]
     if plan_data.plan not in valid_plans:
         raise HTTPException(status_code=400, detail="Invalid plan")
-    
-    # Mock subscription update - would integrate with Whop here
+
     await db.users.update_one(
         {"id": user["id"]},
         {"$set": {
             "plan": plan_data.plan,
             "billing_cycle": plan_data.billing_cycle,
-            "subscription_status": "active"
+            "subscription_status": "active",
+            "trial_started": True
         }}
     )
-    
+
     return {"message": "Subscription updated", "plan": plan_data.plan}
 
 @api_router.get("/subscription/plans")
@@ -348,7 +426,7 @@ async def get_plans():
                 ]
             }
         ],
-        "trial_days": 3
+        "trial_days": TRIAL_DAYS
     }
 
 # ==================== DOCUMENT ROUTES ====================
@@ -358,10 +436,11 @@ async def upload_document(
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
-    # Read file content
+    require_feature_access(user)
+
     content = await file.read()
-    content_base64 = base64.b64encode(content).decode('utf-8')
-    
+    content_base64 = base64.b64encode(content).decode("utf-8")
+
     doc_id = str(uuid.uuid4())
     doc = {
         "id": doc_id,
@@ -374,12 +453,13 @@ async def upload_document(
         "risks": None,
         "obligations": None,
         "simple_explanation": None,
+        "what_this_means": None,
         "analyzed": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.documents.insert_one(doc)
-    
+
     return DocumentResponse(
         id=doc_id,
         name=file.filename,
@@ -390,25 +470,23 @@ async def upload_document(
 
 @api_router.post("/documents/{doc_id}/analyze", response_model=DocumentResponse)
 async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     doc = await db.documents.find_one({"id": doc_id, "user_id": user["id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    
-    # Decode document content for analysis
+
     try:
         content_bytes = base64.b64decode(doc.get("content", ""))
-        # Try to decode as text
         try:
-            document_text = content_bytes.decode('utf-8')
+            document_text = content_bytes.decode("utf-8")
         except UnicodeDecodeError:
-            # For PDFs/images, we'd need proper parsing - use filename as context for now
             document_text = f"Document: {doc['name']} (binary content - PDF/image parsing would extract text here)"
     except Exception:
         document_text = f"Document: {doc['name']}"
-    
-    # Use AI service to analyze document with structured prompt
-    analysis = await ai_analyze_document(document_text, doc['name'])
-    
+
+    analysis = await ai_analyze_document(document_text, doc["name"])
+
     await db.documents.update_one(
         {"id": doc_id},
         {"$set": {
@@ -421,7 +499,7 @@ async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
             "analyzed": True
         }}
     )
-    
+
     return DocumentResponse(
         id=doc_id,
         name=doc["name"],
@@ -438,15 +516,19 @@ async def analyze_document(doc_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.get("/documents", response_model=List[DocumentResponse])
 async def get_documents(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     docs = await db.documents.find(
         {"user_id": user["id"]},
         {"_id": 0, "content": 0}
     ).to_list(100)
-    
+
     return [DocumentResponse(**doc) for doc in docs]
 
 @api_router.get("/documents/{doc_id}", response_model=DocumentResponse)
 async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     doc = await db.documents.find_one(
         {"id": doc_id, "user_id": user["id"]},
         {"_id": 0, "content": 0}
@@ -457,6 +539,8 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     result = await db.documents.delete_one({"id": doc_id, "user_id": user["id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -466,15 +550,15 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.post("/chat", response_model=ChatResponse)
 async def send_chat_message(message: ChatMessage, user: dict = Depends(get_current_user)):
-    # Get document context if provided
+    require_feature_access(user)
+
     context = None
     document_name = None
-    
+
     if message.document_id:
         doc = await db.documents.find_one({"id": message.document_id, "user_id": user["id"]}, {"_id": 0})
         if doc:
-            document_name = doc.get('name')
-            # Build context from document analysis
+            document_name = doc.get("name")
             if doc.get("summary"):
                 context = f"""
 Document Summary: {doc.get('summary', '')}
@@ -488,10 +572,9 @@ Risks:
 Obligations:
 {chr(10).join('- ' + o for o in (doc.get('obligations') or []))}
 """
-    
-    # Use AI service with structured Copilot prompt
+
     ai_response = await chat_with_context(message.message, context, document_name)
-    
+
     chat_id = str(uuid.uuid4())
     chat_doc = {
         "id": chat_id,
@@ -501,17 +584,19 @@ Obligations:
         "document_id": message.document_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.chats.insert_one(chat_doc)
-    
+
     return ChatResponse(**{k: v for k, v in chat_doc.items() if k != "user_id"})
 
 @api_router.get("/chat/history", response_model=List[ChatResponse])
 async def get_chat_history(document_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     query = {"user_id": user["id"]}
     if document_id:
         query["document_id"] = document_id
-    
+
     chats = await db.chats.find(query, {"_id": 0, "user_id": 0}).sort("created_at", -1).to_list(50)
     return [ChatResponse(**chat) for chat in chats]
 
@@ -522,37 +607,39 @@ async def upload_financial_data(
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
+    require_feature_access(user)
+
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
-    
+
     content = await file.read()
     transactions = []
-    
-    # Parse CSV/Excel
+
     try:
-        if file.filename.endswith('.csv'):
-            text_content = content.decode('utf-8')
+        if file.filename.endswith(".csv"):
+            text_content = content.decode("utf-8")
             reader = csv.DictReader(io.StringIO(text_content))
             for row in reader:
                 trans_id = str(uuid.uuid4())
-                description = row.get('description', row.get('Description', 'Unknown'))
-                # Use AI service for categorization with structured prompt
+                description = row.get("description", row.get("Description", "Unknown"))
                 category = await ai_categorize_transaction(description)
+                amount = float(row.get("amount", row.get("Amount", 0)))
+
                 transactions.append({
                     "id": trans_id,
                     "user_id": user["id"],
                     "description": description,
-                    "amount": float(row.get('amount', row.get('Amount', 0))),
+                    "amount": amount,
                     "category": category,
-                    "date": row.get('date', row.get('Date', datetime.now(timezone.utc).isoformat()[:10])),
-                    "type": "expense" if float(row.get('amount', row.get('Amount', 0))) < 0 else "income",
+                    "date": row.get("date", row.get("Date", datetime.now(timezone.utc).isoformat()[:10])),
+                    "type": "expense" if amount < 0 else "income",
                     "source": "csv_import",
                     "created_at": datetime.now(timezone.utc).isoformat()
                 })
-        
+
         if transactions:
             await db.transactions.insert_many(transactions)
-        
+
         return {"message": f"Imported {len(transactions)} transactions", "count": len(transactions)}
     except Exception as e:
         logger.error(f"Error parsing file: {e}")
@@ -560,9 +647,11 @@ async def upload_financial_data(
 
 @api_router.post("/bookkeeping/transactions", response_model=TransactionResponse)
 async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
-    
+
     trans_id = str(uuid.uuid4())
     trans_doc = {
         "id": trans_id,
@@ -575,7 +664,7 @@ async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_
         "source": "manual",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.transactions.insert_one(trans_doc)
     return TransactionResponse(**{k: v for k, v in trans_doc.items() if k != "user_id"})
 
@@ -586,9 +675,11 @@ async def get_transactions(
     category: Optional[str] = None,
     user: dict = Depends(get_current_user)
 ):
+    require_feature_access(user)
+
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
-    
+
     query = {"user_id": user["id"]}
     if start_date:
         query["date"] = {"$gte": start_date}
@@ -596,35 +687,39 @@ async def get_transactions(
         query.setdefault("date", {})["$lte"] = end_date
     if category:
         query["category"] = category
-    
+
     transactions = await db.transactions.find(query, {"_id": 0, "user_id": 0}).sort("date", -1).to_list(500)
     return [TransactionResponse(**t) for t in transactions]
 
 @api_router.put("/bookkeeping/transactions/{trans_id}", response_model=TransactionResponse)
 async def update_transaction(trans_id: str, update: TransactionUpdate, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required for manual editing")
-    
+
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
-    
+
     result = await db.transactions.update_one(
         {"id": trans_id, "user_id": user["id"]},
         {"$set": update_data}
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    
+
     trans = await db.transactions.find_one({"id": trans_id}, {"_id": 0, "user_id": 0})
     return TransactionResponse(**trans)
 
 @api_router.delete("/bookkeeping/transactions/{trans_id}")
 async def delete_transaction(trans_id: str, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     result = await db.transactions.delete_one({"id": trans_id, "user_id": user["id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -632,16 +727,16 @@ async def delete_transaction(trans_id: str, user: dict = Depends(get_current_use
 
 @api_router.get("/bookkeeping/insights")
 async def get_financial_insights(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
-    
-    # Get all transactions for insights
+
     transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
-    
+
     total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
     total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
-    
-    # Calculate basic metrics
+
     metrics = {
         "mrr": round(total_income / 12, 2) if total_income else 0,
         "burn_rate": round(total_expenses / max(1, len(set(t["date"][:7] for t in transactions if "date" in t))), 2),
@@ -652,10 +747,9 @@ async def get_financial_insights(user: dict = Depends(get_current_user)):
         "total_expenses": total_expenses,
         "net_profit": total_income - total_expenses
     }
-    
-    # Use AI service to generate insights with structured Financial Insights prompt
+
     ai_insights = await generate_financial_insights(transactions, metrics)
-    
+
     return {
         **metrics,
         "ai_analysis": ai_insights.get("ai_analysis"),
@@ -666,18 +760,20 @@ async def get_financial_insights(user: dict = Depends(get_current_user)):
 
 @api_router.get("/reports/profit-loss", response_model=FinancialReportResponse)
 async def get_profit_loss(period: str = "monthly", user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
-    
+
     income = sum(t["amount"] for t in transactions if t["type"] == "income")
     expenses_by_category = {}
     for t in transactions:
         if t["type"] == "expense":
             cat = t["category"]
             expenses_by_category[cat] = expenses_by_category.get(cat, 0) + abs(t["amount"])
-    
+
     return FinancialReportResponse(
         report_type="profit_loss",
         period=period,
@@ -693,14 +789,16 @@ async def get_profit_loss(period: str = "monthly", user: dict = Depends(get_curr
 
 @api_router.get("/reports/balance-sheet", response_model=FinancialReportResponse)
 async def get_balance_sheet(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
-    
+
     total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
     total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
-    
+
     return FinancialReportResponse(
         report_type="balance_sheet",
         period="current",
@@ -724,12 +822,13 @@ async def get_balance_sheet(user: dict = Depends(get_current_user)):
 
 @api_router.get("/reports/cash-flow", response_model=FinancialReportResponse)
 async def get_cash_flow(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
-    
-    # Group by month
+
     monthly_data = {}
     for t in transactions:
         month = t["date"][:7]
@@ -739,7 +838,7 @@ async def get_cash_flow(user: dict = Depends(get_current_user)):
             monthly_data[month]["inflow"] += t["amount"]
         else:
             monthly_data[month]["outflow"] += abs(t["amount"])
-    
+
     return FinancialReportResponse(
         report_type="cash_flow",
         period="monthly",
@@ -754,10 +853,11 @@ async def get_cash_flow(user: dict = Depends(get_current_user)):
 
 @api_router.get("/reports/export/{report_type}")
 async def export_report(report_type: str, format: str = "csv", user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
-    # Return export data - in production would generate actual files
+
     return {
         "message": f"Export initiated for {report_type} in {format} format",
         "download_url": f"/api/reports/download/{report_type}.{format}"
@@ -767,20 +867,23 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
 
 @api_router.get("/integrations", response_model=List[IntegrationResponse])
 async def get_integrations(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
-    integrations = await db.integrations.find({"user_id": user["id"]}, {"_id": 0, "user_id": 0, "api_key": 0, "api_secret": 0}).to_list(20)
-    
-    # Return default available integrations if none connected
+
+    integrations = await db.integrations.find(
+        {"user_id": user["id"]},
+        {"_id": 0, "user_id": 0, "api_key": 0, "api_secret": 0}
+    ).to_list(20)
+
     available = [
         {"id": "shopify", "platform": "shopify", "status": "disconnected"},
         {"id": "stripe", "platform": "stripe", "status": "disconnected"},
         {"id": "paypal", "platform": "paypal", "status": "disconnected"},
         {"id": "whop", "platform": "whop", "status": "disconnected"}
     ]
-    
-    # Merge with connected ones
+
     connected_platforms = {i["platform"] for i in integrations}
     result = []
     for a in available:
@@ -789,19 +892,20 @@ async def get_integrations(user: dict = Depends(get_current_user)):
             result.append(IntegrationResponse(**connected))
         else:
             result.append(IntegrationResponse(**a))
-    
+
     return result
 
 @api_router.post("/integrations/connect", response_model=IntegrationResponse)
 async def connect_integration(integration: IntegrationConnect, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     valid_platforms = ["shopify", "stripe", "paypal", "whop"]
     if integration.platform not in valid_platforms:
         raise HTTPException(status_code=400, detail="Invalid platform")
-    
-    # MOCKED integration - would actually connect to platform APIs
+
     int_id = str(uuid.uuid4())
     int_doc = {
         "id": int_id,
@@ -812,13 +916,13 @@ async def connect_integration(integration: IntegrationConnect, user: dict = Depe
         "status": "connected",
         "connected_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.integrations.update_one(
         {"user_id": user["id"], "platform": integration.platform},
         {"$set": int_doc},
         upsert=True
     )
-    
+
     return IntegrationResponse(
         id=int_id,
         platform=integration.platform,
@@ -828,9 +932,11 @@ async def connect_integration(integration: IntegrationConnect, user: dict = Depe
 
 @api_router.delete("/integrations/{platform}")
 async def disconnect_integration(platform: str, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     result = await db.integrations.delete_one({"user_id": user["id"], "platform": platform})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Integration not found")
@@ -838,14 +944,15 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
 
 @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     integration = await db.integrations.find_one({"user_id": user["id"], "platform": platform})
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not connected")
-    
-    # MOCKED sync - would pull real data from platform
+
     mock_transactions = [
         {
             "id": str(uuid.uuid4()),
@@ -859,9 +966,9 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
             "created_at": datetime.now(timezone.utc).isoformat()
         }
     ]
-    
+
     await db.transactions.insert_many(mock_transactions)
-    
+
     return {"message": f"Synced {len(mock_transactions)} transactions from {platform}"}
 
 # ==================== TAX INSIGHTS ROUTES (ENTERPRISE) ====================
@@ -871,18 +978,18 @@ async def analyze_tax_documents(
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
+
     insight_id = str(uuid.uuid4())
-    
-    # Get all transactions for context
+
     transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
     total_expenses = sum(abs(t["amount"]) for t in transactions if t.get("type") == "expense")
-    
-    # Use AI service to generate tax insights with structured prompt
+
     ai_tax_insights = await generate_tax_insights(transactions, total_expenses)
-    
+
     insight = {
         "id": insight_id,
         "user_id": user["id"],
@@ -894,46 +1001,55 @@ async def analyze_tax_documents(
         "total_deductible": ai_tax_insights.get("total_deductible", 0),
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.tax_insights.insert_one(insight)
-    
+
     return TaxInsightResponse(**{k: v for k, v in insight.items() if k != "user_id"})
 
 @api_router.get("/tax/insights", response_model=List[TaxInsightResponse])
 async def get_tax_insights(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
-    
-    insights = await db.tax_insights.find({"user_id": user["id"]}, {"_id": 0, "user_id": 0}).sort("generated_at", -1).to_list(10)
+
+    insights = await db.tax_insights.find(
+        {"user_id": user["id"]},
+        {"_id": 0, "user_id": 0}
+    ).sort("generated_at", -1).to_list(10)
+
     return [TaxInsightResponse(**i) for i in insights]
 
 # ==================== DASHBOARD STATS ====================
 
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
     doc_count = await db.documents.count_documents({"user_id": user["id"]})
     chat_count = await db.chats.count_documents({"user_id": user["id"]})
-    
+
     stats = {
         "documents_count": doc_count,
         "chats_count": chat_count,
         "plan": user.get("plan", "basic"),
+        "trial_started": user.get("trial_started", False),
         "trial_ends_at": user.get("trial_ends_at"),
-        "subscription_status": user.get("subscription_status", "trial")
+        "subscription_status": user.get("subscription_status", "inactive")
     }
-    
+
     if check_plan_access(user, "premium"):
         trans_count = await db.transactions.count_documents({"user_id": user["id"]})
         stats["transactions_count"] = trans_count
-        
+
         transactions = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
         stats["total_income"] = sum(t["amount"] for t in transactions if t["type"] == "income")
         stats["total_expenses"] = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
-    
+
     if check_plan_access(user, "enterprise"):
         int_count = await db.integrations.count_documents({"user_id": user["id"], "status": "connected"})
         stats["integrations_connected"] = int_count
-    
+
     return stats
 
 # ==================== HEALTH CHECK ====================
@@ -946,13 +1062,12 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
-# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
