@@ -1,174 +1,146 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import { supabase } from "../supabase";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import axios from "axios";
 
 const AuthContext = createContext(null);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
-};
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const buildUserObject = (authUser) => {
-    if (!authUser) return null;
-
-    return {
-      id: authUser.id,
-      email: authUser.email,
-      name: authUser.user_metadata?.name || "",
-      plan: authUser.user_metadata?.plan || "basic",
-      raw: authUser,
-    };
-  };
-
-  const refreshUser = async () => {
+  const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [user, setUser] = useState(() => {
     try {
-      const {
-        data: { user: authUser },
-        error,
-      } = await supabase.auth.getUser();
-
-      if (error) throw error;
-
-      setUser(buildUserObject(authUser));
-      return authUser;
-    } catch (error) {
-      console.error("Failed to refresh user:", error);
-      setUser(null);
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch {
       return null;
     }
-  };
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadSession = async () => {
-      try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
-
-        if (error) throw error;
-
-        setToken(session?.access_token || null);
-        setUser(buildUserObject(session?.user || null));
-      } catch (error) {
-        console.error("Failed to load session:", error);
-        setToken(null);
+    const syncAuth = async () => {
+      if (!token) {
         setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await axios.get(`${API}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        setUser(response.data);
+        localStorage.setItem("user", JSON.stringify(response.data));
+      } catch (error) {
+        console.error("Auth sync failed:", error);
+        setToken("");
+        setUser(null);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
       } finally {
         setLoading(false);
       }
     };
 
-    loadSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setToken(session?.access_token || null);
-      setUser(buildUserObject(session?.user || null));
-      setLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+    syncAuth();
+  }, [token]);
 
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const response = await axios.post(`${API}/auth/login`, {
+        email,
+        password,
+      });
 
-    if (error) throw error;
+      const accessToken = response.data?.access_token || "";
+      const loggedInUser = response.data?.user || null;
 
-    setToken(data?.session?.access_token || null);
-    setUser(buildUserObject(data?.user || null));
+      setToken(accessToken);
+      setUser(loggedInUser);
 
-    return { data, error: null };
+      localStorage.setItem("token", accessToken);
+      localStorage.setItem("user", JSON.stringify(loggedInUser));
+
+      return { data: response.data, error: null };
+    } catch (error) {
+      console.error("Login failed:", error);
+      return {
+        data: null,
+        error: {
+          message:
+            error?.response?.data?.detail ||
+            error?.response?.data?.message ||
+            "Login failed",
+        },
+      };
+    }
   };
 
   const register = async (name, email, password) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          plan: "basic",
+    try {
+      const response = await axios.post(`${API}/auth/register`, {
+        name,
+        email,
+        password,
+      });
+
+      const accessToken = response.data?.access_token || "";
+      const newUser = response.data?.user || null;
+
+      setToken(accessToken);
+      setUser(newUser);
+
+      localStorage.setItem("token", accessToken);
+      localStorage.setItem("user", JSON.stringify(newUser));
+
+      return { data: response.data, error: null };
+    } catch (error) {
+      console.error("Register failed:", error);
+      return {
+        data: null,
+        error: {
+          message:
+            error?.response?.data?.detail ||
+            error?.response?.data?.message ||
+            "Registration failed",
         },
-      },
-    });
-
-    if (error) throw error;
-
-    setToken(data?.session?.access_token || null);
-    setUser(buildUserObject(data?.user || null));
-
-    return { data, error: null };
+      };
+    }
   };
 
-  const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-
-    if (error) throw error;
-
-    setToken(null);
+  const logout = () => {
+    setToken("");
     setUser(null);
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
   };
 
-  const updatePlan = async (plan, billingCycle) => {
-    const { data, error } = await supabase.auth.updateUser({
-      data: {
-        ...user?.raw?.user_metadata,
-        name: user?.name || "",
-        plan,
-        billingCycle,
-      },
-    });
-
-    if (error) throw error;
-
-    setUser(buildUserObject(data?.user || null));
-
-    return { success: true, plan, billingCycle };
-  };
-
-  const getAuthHeader = () => ({
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  const checkPlanAccess = (requiredPlan) => {
-    const planHierarchy = { basic: 1, premium: 2, enterprise: 3 };
-    const userLevel = planHierarchy[user?.plan] || 1;
-    const requiredLevel = planHierarchy[requiredPlan] || 1;
-    return userLevel >= requiredLevel;
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        login,
-        register,
-        logout,
-        updatePlan,
-        getAuthHeader,
-        checkPlanAccess,
-        refreshUser,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      token,
+      setToken,
+      user,
+      setUser,
+      loading,
+      login,
+      register,
+      logout,
+      isAuthenticated: !!token && !!user,
+    }),
+    [token, user, loading]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+
+  return context;
 };
