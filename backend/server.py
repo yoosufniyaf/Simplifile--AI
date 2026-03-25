@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -185,10 +185,6 @@ def parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
         return None
 
 async def normalize_user_access(user: dict) -> dict:
-    """
-    Keeps subscription/trial state clean.
-    If a trial expired, mark the user inactive.
-    """
     updated_fields = {}
 
     if user.get("subscription_status") == "trial":
@@ -209,11 +205,6 @@ async def normalize_user_access(user: dict) -> dict:
     return user
 
 def has_feature_access(user: dict) -> bool:
-    """
-    Access is allowed only if:
-    - subscription_status is active, OR
-    - subscription_status is trial and the trial has not expired
-    """
     status = user.get("subscription_status", "inactive")
 
     if status == "active":
@@ -268,6 +259,16 @@ def to_user_response(user: dict) -> UserResponse:
         created_at=user["created_at"]
     )
 
+def infer_plan_from_text(*values) -> Optional[str]:
+    combined = " ".join(str(v).lower() for v in values if v)
+    if "enterprise" in combined:
+        return "enterprise"
+    if "premium" in combined:
+        return "premium"
+    if "basic" in combined:
+        return "basic"
+    return None
+
 # ==================== AUTH ROUTES ====================
 
 @api_router.post("/auth/register", response_model=TokenResponse)
@@ -279,8 +280,6 @@ async def register(user_data: UserCreate):
     user_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # IMPORTANT:
-    # New users do NOT get trial access automatically anymore.
     user_doc = {
         "id": user_id,
         "email": user_data.email,
@@ -327,7 +326,6 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 @api_router.post("/subscription/start-trial")
 async def start_trial(user: dict = Depends(get_current_user)):
-    # Already active subscription
     if user.get("subscription_status") == "active":
         return {
             "message": "Subscription already active",
@@ -336,7 +334,6 @@ async def start_trial(user: dict = Depends(get_current_user)):
             "subscription_status": user.get("subscription_status")
         }
 
-    # Already on an active trial
     if has_feature_access(user) and user.get("subscription_status") == "trial":
         return {
             "message": "Trial already active",
@@ -375,7 +372,8 @@ async def update_subscription(plan_data: PlanUpdate, user: dict = Depends(get_cu
             "plan": plan_data.plan,
             "billing_cycle": plan_data.billing_cycle,
             "subscription_status": "active",
-            "trial_started": True
+            "trial_started": True,
+            "trial_ends_at": None
         }}
     )
 
@@ -427,6 +425,96 @@ async def get_plans():
             }
         ],
         "trial_days": TRIAL_DAYS
+    }
+
+# ==================== WHOP WEBHOOK ====================
+
+@api_router.post("/webhook/whop")
+async def whop_webhook(request: Request):
+    payload = await request.json()
+    logger.info(f"Whop webhook received: {payload}")
+
+    event_type = payload.get("type") or payload.get("event") or payload.get("event_type")
+    data = payload.get("data") or payload.get("payload") or payload
+
+    customer_email = (
+        data.get("customer_email")
+        or data.get("email")
+        or data.get("user_email")
+        or data.get("buyer_email")
+        or data.get("member_email")
+    )
+
+    plan_hint = (
+        data.get("plan")
+        or data.get("plan_id")
+        or data.get("product")
+        or data.get("product_id")
+        or data.get("offer_title")
+        or data.get("product_name")
+    )
+
+    billing_cycle = (
+        data.get("billing_cycle")
+        or data.get("interval")
+        or data.get("renewal_period")
+        or "monthly"
+    )
+
+    if not customer_email:
+        return {"status": "ignored", "reason": "no email found", "event_type": event_type}
+
+    user = await db.users.find_one({"email": customer_email}, {"_id": 0})
+    if not user:
+        return {"status": "ignored", "reason": "user not found", "email": customer_email, "event_type": event_type}
+
+    event_text = f"{event_type} {json.dumps(data)}".lower()
+
+    cancelled_keywords = ["cancel", "cancelled", "canceled", "refund", "refunded", "chargeback", "dispute", "revoked", "expired"]
+    paid_keywords = ["payment", "purchase", "checkout", "subscription", "membership", "order", "paid", "succeeded", "active", "created"]
+
+    inferred_plan = infer_plan_from_text(plan_hint, event_text) or user.get("plan", "basic")
+
+    if any(word in event_text for word in cancelled_keywords):
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {
+                "subscription_status": "inactive",
+                "trial_started": False,
+                "trial_ends_at": None
+            }}
+        )
+        return {
+            "status": "ok",
+            "action": "deactivated",
+            "email": customer_email,
+            "event_type": event_type
+        }
+
+    if any(word in event_text for word in paid_keywords):
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {
+                "plan": inferred_plan,
+                "billing_cycle": billing_cycle,
+                "subscription_status": "active",
+                "trial_started": True,
+                "trial_ends_at": None
+            }}
+        )
+        return {
+            "status": "ok",
+            "action": "activated",
+            "email": customer_email,
+            "plan": inferred_plan,
+            "event_type": event_type
+        }
+
+    return {
+        "status": "ignored",
+        "reason": "event not handled",
+        "email": customer_email,
+        "event_type": event_type
     }
 
 # ==================== DOCUMENT ROUTES ====================
