@@ -12,10 +12,10 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { AIEmptyState } from "../components/ui/ai-components";
-import { 
-  MessageSquare, 
-  Send, 
-  Bot, 
+import {
+  MessageSquare,
+  Send,
+  Bot,
   User,
   FileText,
   Loader2,
@@ -29,20 +29,18 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 // Chat Message Component
 const ChatMessage = ({ message, isUser }) => {
-  // Parse markdown-style formatting in AI responses
   const formatMessage = (text) => {
     if (isUser) return text;
-    
-    const lines = text.split('\n');
+
+    const lines = String(text || "").split("\n");
     const elements = [];
     let currentList = [];
     let inList = false;
 
     lines.forEach((line, i) => {
       const trimmed = line.trim();
-      
-      // Handle headers
-      if (trimmed.startsWith('## ')) {
+
+      if (trimmed.startsWith("## ")) {
         if (inList && currentList.length > 0) {
           elements.push(
             <ul key={`list-${i}`} className="space-y-1.5 my-2">
@@ -57,24 +55,23 @@ const ChatMessage = ({ message, isUser }) => {
           currentList = [];
           inList = false;
         }
+
         elements.push(
-          <h4 key={i} className="font-semibold text-foreground mt-4 mb-2 first:mt-0" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <h4
+            key={i}
+            className="font-semibold text-foreground mt-4 mb-2 first:mt-0"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             {trimmed.substring(3)}
           </h4>
         );
-      }
-      // Handle bullet points
-      else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
         inList = true;
         currentList.push(trimmed.substring(2));
-      }
-      // Handle numbered lists
-      else if (/^\d+\.\s/.test(trimmed)) {
+      } else if (/^\d+\.\s/.test(trimmed)) {
         inList = true;
-        currentList.push(trimmed.replace(/^\d+\.\s/, ''));
-      }
-      // Handle regular text
-      else if (trimmed) {
+        currentList.push(trimmed.replace(/^\d+\.\s/, ""));
+      } else if (trimmed) {
         if (inList && currentList.length > 0) {
           elements.push(
             <ul key={`list-${i}`} className="space-y-1.5 my-2">
@@ -89,6 +86,7 @@ const ChatMessage = ({ message, isUser }) => {
           currentList = [];
           inList = false;
         }
+
         elements.push(
           <p key={i} className="text-sm leading-relaxed mb-2 last:mb-0">
             {trimmed}
@@ -97,7 +95,6 @@ const ChatMessage = ({ message, isUser }) => {
       }
     });
 
-    // Handle remaining list items
     if (currentList.length > 0) {
       elements.push(
         <ul key="final-list" className="space-y-1.5 my-2">
@@ -115,26 +112,30 @@ const ChatMessage = ({ message, isUser }) => {
   };
 
   return (
-    <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
-        isUser 
-          ? 'bg-primary/20 border border-primary/30' 
-          : 'bg-card border border-border'
-      }`}>
+    <div className={`flex items-start gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
+      <div
+        className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
+          isUser
+            ? "bg-primary/20 border border-primary/30"
+            : "bg-card border border-border"
+        }`}
+      >
         {isUser ? (
           <User className="h-4 w-4 text-primary" />
         ) : (
           <Bot className="h-4 w-4 text-muted-foreground" />
         )}
       </div>
-      <div className={`max-w-[80%] ${isUser ? 'text-right' : ''}`}>
-        <div className={`rounded-2xl px-4 py-3 ${
-          isUser 
-            ? 'bg-primary text-primary-foreground rounded-tr-sm' 
-            : 'bg-card border border-border rounded-tl-sm'
-        }`}>
-          <div className={isUser ? 'text-sm' : 'text-muted-foreground'}>
-            {formatMessage(isUser ? message : message)}
+      <div className={`max-w-[80%] ${isUser ? "text-right" : ""}`}>
+        <div
+          className={`rounded-2xl px-4 py-3 ${
+            isUser
+              ? "bg-primary text-primary-foreground rounded-tr-sm"
+              : "bg-card border border-border rounded-tl-sm"
+          }`}
+        >
+          <div className={isUser ? "text-sm" : "text-muted-foreground"}>
+            {formatMessage(message)}
           </div>
         </div>
       </div>
@@ -151,9 +152,18 @@ const TypingIndicator = () => (
     <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3">
       <div className="flex items-center gap-2">
         <div className="flex gap-1">
-          <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <span
+            className="w-2 h-2 bg-primary/60 rounded-full animate-bounce"
+            style={{ animationDelay: "0ms" }}
+          />
+          <span
+            className="w-2 h-2 bg-primary/60 rounded-full animate-bounce"
+            style={{ animationDelay: "150ms" }}
+          />
+          <span
+            className="w-2 h-2 bg-primary/60 rounded-full animate-bounce"
+            style={{ animationDelay: "300ms" }}
+          />
         </div>
         <span className="text-sm text-muted-foreground ml-1">Thinking...</span>
       </div>
@@ -173,6 +183,18 @@ const ChatPage = () => {
   const scrollRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  const toArray = (value, possibleKeys = []) => {
+    if (Array.isArray(value)) return value;
+
+    for (const key of possibleKeys) {
+      if (Array.isArray(value?.[key])) {
+        return value[key];
+      }
+    }
+
+    return [];
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -182,21 +204,33 @@ const ChatPage = () => {
       const response = await axios.get(`${API}/documents`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setDocuments(response.data.filter(d => d.analyzed));
+
+      const docsArray = toArray(response.data, ["documents", "data"]);
+      setDocuments(docsArray.filter((d) => d?.analyzed));
     } catch (error) {
       console.error("Failed to fetch documents:", error);
+      setDocuments([]);
     }
   }, [token]);
 
   const fetchChatHistory = useCallback(async () => {
     try {
-      const params = selectedDocument ? `?document_id=${selectedDocument}` : "";
+      setHistoryLoading(true);
+
+      const params =
+        selectedDocument && selectedDocument !== "none"
+          ? `?document_id=${selectedDocument}`
+          : "";
+
       const response = await axios.get(`${API}/chat/history${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setMessages(response.data.reverse());
+
+      const historyArray = toArray(response.data, ["history", "messages", "data"]);
+      setMessages([...historyArray].reverse());
     } catch (error) {
       console.error("Failed to fetch chat history:", error);
+      setMessages([]);
     } finally {
       setHistoryLoading(false);
     }
@@ -232,24 +266,31 @@ const ChatPage = () => {
       ai_response: null,
       created_at: new Date().toISOString()
     };
-    setMessages(prev => [...prev, tempUserMsg]);
+
+    setMessages((prev) => [...prev, tempUserMsg]);
 
     try {
       const response = await axios.post(
         `${API}/chat`,
         {
           message: userMessage,
-          document_id: selectedDocument || null
+          document_id:
+            selectedDocument && selectedDocument !== "none"
+              ? selectedDocument
+              : null
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
       );
 
-      setMessages(prev => prev.map(m => 
-        m.id === tempUserMsg.id ? response.data : m
-      ));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempUserMsg.id ? response.data : m))
+      );
     } catch (error) {
+      console.error("Failed to send message:", error);
       toast.error("Failed to send message. Please try again.");
-      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+      setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
     } finally {
       setLoading(false);
     }
@@ -271,18 +312,24 @@ const ChatPage = () => {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col" data-testid="chat-page">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <h1
+            className="text-3xl font-bold tracking-tight"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             AI Chat
           </h1>
           <p className="text-muted-foreground mt-1">
             Ask questions about your documents or get financial advice
           </p>
         </div>
+
         <Select value={selectedDocument} onValueChange={setSelectedDocument}>
-          <SelectTrigger className="w-64 bg-card border-border" data-testid="document-select">
+          <SelectTrigger
+            className="w-64 bg-card border-border"
+            data-testid="document-select"
+          >
             <SelectValue placeholder="Select a document (optional)" />
           </SelectTrigger>
           <SelectContent>
@@ -299,31 +346,30 @@ const ChatPage = () => {
         </Select>
       </div>
 
-      {/* Chat Area */}
       <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <CardContent className="flex-1 flex flex-col p-0 min-h-0">
-          {/* Messages */}
-          <ScrollArea 
-            className="flex-1 p-6" 
-            ref={scrollRef}
-            onScroll={handleScroll}
-          >
+          <ScrollArea className="flex-1 p-6" ref={scrollRef} onScroll={handleScroll}>
             {historyLoading ? (
               <div className="flex flex-col items-center justify-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                <p className="text-sm text-muted-foreground">Loading conversation...</p>
+                <p className="text-sm text-muted-foreground">
+                  Loading conversation...
+                </p>
               </div>
             ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
                   <Sparkles className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                <h3
+                  className="text-lg font-semibold mb-2"
+                  style={{ fontFamily: "Outfit, sans-serif" }}
+                >
                   Start a conversation
                 </h3>
                 <p className="text-muted-foreground mb-6 max-w-md text-sm">
-                  Ask me anything about your documents, finances, or business operations. 
-                  Select a document above for context-aware responses.
+                  Ask me anything about your documents, finances, or business
+                  operations. Select a document above for context-aware responses.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-w-lg w-full">
                   {suggestedQuestions.map((question, i) => (
@@ -345,10 +391,7 @@ const ChatPage = () => {
               <div className="space-y-6">
                 {messages.map((msg) => (
                   <div key={msg.id} className="space-y-4">
-                    {/* User Message */}
                     <ChatMessage message={msg.user_message} isUser={true} />
-
-                    {/* AI Response */}
                     {msg.ai_response && (
                       <ChatMessage message={msg.ai_response} isUser={false} />
                     )}
@@ -360,7 +403,6 @@ const ChatPage = () => {
             )}
           </ScrollArea>
 
-          {/* Scroll to bottom button */}
           {showScrollButton && (
             <button
               onClick={scrollToBottom}
@@ -370,16 +412,19 @@ const ChatPage = () => {
             </button>
           )}
 
-          {/* Input Area */}
           <div className="p-4 border-t border-border bg-card/50">
             {selectedDocument && selectedDocument !== "none" && (
               <div className="flex items-center gap-2 mb-3 px-1">
                 <FileText className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs text-muted-foreground">
-                  Chatting about: <span className="text-foreground">{documents.find(d => d.id === selectedDocument)?.name}</span>
+                  Chatting about:{" "}
+                  <span className="text-foreground">
+                    {documents.find((d) => d.id === selectedDocument)?.name}
+                  </span>
                 </span>
               </div>
             )}
+
             <div className="flex items-center gap-3">
               <Input
                 placeholder="Ask me anything..."
@@ -390,8 +435,8 @@ const ChatPage = () => {
                 disabled={loading}
                 data-testid="chat-input"
               />
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="h-12 px-6 glow-button"
                 onClick={handleSend}
                 disabled={loading || !input.trim()}
