@@ -6,7 +6,7 @@ const AuthContext = createContext(null);
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("user") || "null");
@@ -31,8 +31,11 @@ export const AuthProvider = ({ children }) => {
           },
         });
 
-        setUser(response.data);
-        localStorage.setItem("user", JSON.stringify(response.data));
+        const syncedUser = response.data || null;
+
+        setUser(syncedUser);
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(syncedUser));
       } catch (error) {
         console.error("Auth sync failed:", error);
         setToken("");
@@ -117,6 +120,22 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("user");
   };
 
+  const checkPlanAccess = (requiredPlan) => {
+    if (!requiredPlan) return true;
+    if (!user) return false;
+
+    const planHierarchy = {
+      basic: 1,
+      premium: 2,
+      enterprise: 3,
+    };
+
+    const userPlan = (user?.plan || "basic").toLowerCase();
+    const required = requiredPlan.toLowerCase();
+
+    return (planHierarchy[userPlan] || 0) >= (planHierarchy[required] || 0);
+  };
+
   const value = useMemo(
     () => ({
       token,
@@ -127,6 +146,7 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       logout,
+      checkPlanAccess,
       isAuthenticated: !!token && !!user,
     }),
     [token, user, loading]
