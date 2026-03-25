@@ -42,14 +42,37 @@ function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");
 }
 
-const DashboardLayout = () => {
-  const { user, logout, checkPlanAccess } = useAuth();
+export default function DashboardLayout() {
+  const auth = useAuth() || {};
+  const user = auth.user || null;
+  const logout = auth.logout;
+  const checkPlanAccess = auth.checkPlanAccess;
+
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const safeCheckPlanAccess = (plan) => {
+    if (typeof checkPlanAccess !== "function") {
+      return true;
+    }
+
+    try {
+      return checkPlanAccess(plan);
+    } catch (error) {
+      console.error("checkPlanAccess error:", error);
+      return true;
+    }
+  };
+
   const handleLogout = () => {
-    logout();
+    try {
+      if (typeof logout === "function") {
+        logout();
+      }
+    } catch (error) {
+      console.error("logout error:", error);
+    }
     navigate("/");
   };
 
@@ -66,7 +89,7 @@ const DashboardLayout = () => {
 
   const NavItem = ({ item, mobile = false }) => {
     const isActive = location.pathname === item.path;
-    const hasAccess = checkPlanAccess(item.plan);
+    const hasAccess = safeCheckPlanAccess(item.plan);
 
     return (
       <Link
@@ -98,7 +121,6 @@ const DashboardLayout = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile Header */}
       <header className="lg:hidden glass-nav sticky top-0 z-50 px-4 py-3 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -117,7 +139,6 @@ const DashboardLayout = () => {
         </Button>
       </header>
 
-      {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
           className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
@@ -125,7 +146,6 @@ const DashboardLayout = () => {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={joinClasses(
           "fixed top-0 left-0 h-full w-64 bg-card border-r border-border z-50 transition-transform duration-300 lg:translate-x-0",
@@ -133,7 +153,6 @@ const DashboardLayout = () => {
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
           <div className="p-6 border-b border-border">
             <Link to="/dashboard" className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-primary glow-button flex items-center justify-center">
@@ -151,14 +170,12 @@ const DashboardLayout = () => {
             </Link>
           </div>
 
-          {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => (
               <NavItem key={item.path} item={item} />
             ))}
           </nav>
 
-          {/* User Section */}
           <div className="p-4 border-t border-border">
             <div className="flex items-center gap-3 px-2 py-2 mb-3 rounded-lg bg-muted/30">
               <div className="flex items-center gap-2">
@@ -187,9 +204,10 @@ const DashboardLayout = () => {
                       {user?.name?.charAt(0)?.toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
+
                   <div className="flex-1 text-left">
-                    <p className="text-sm font-medium truncate">{user?.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                    <p className="text-sm font-medium truncate">{user?.name || "User"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email || ""}</p>
                   </div>
                 </Button>
               </DropdownMenuTrigger>
@@ -218,7 +236,6 @@ const DashboardLayout = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="lg:ml-64 min-h-screen">
         <div className="p-6 lg:p-8">
           <Outlet />
@@ -226,6 +243,4 @@ const DashboardLayout = () => {
       </main>
     </div>
   );
-};
-
-export default DashboardLayout;
+}
