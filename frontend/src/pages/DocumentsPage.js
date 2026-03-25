@@ -19,15 +19,14 @@ import {
   AIEmptyState,
   RiskItem
 } from "../components/ui/ai-components";
-import { 
-  FileText, 
-  Upload, 
-  Search, 
-  Trash2, 
+import {
+  FileText,
+  Upload,
+  Search,
+  Trash2,
   Eye,
   AlertTriangle,
   CheckCircle,
-  FileIcon,
   Loader2,
   Sparkles,
   ListChecks,
@@ -48,14 +47,29 @@ const DocumentsPage = () => {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
+  const toArray = (value, possibleKeys = []) => {
+    if (Array.isArray(value)) return value;
+
+    for (const key of possibleKeys) {
+      if (Array.isArray(value?.[key])) {
+        return value[key];
+      }
+    }
+
+    return [];
+  };
+
   const fetchDocuments = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/documents`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setDocuments(response.data);
+
+      const documentsArray = toArray(response.data, ["documents", "data"]);
+      setDocuments(documentsArray);
     } catch (error) {
       console.error("Failed to fetch documents:", error);
+      setDocuments([]);
       toast.error("Failed to load documents");
     } finally {
       setLoading(false);
@@ -76,7 +90,7 @@ const DocumentsPage = () => {
     setUploading(true);
     try {
       await axios.post(`${API}/documents/upload`, formData, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data"
         }
@@ -84,6 +98,7 @@ const DocumentsPage = () => {
       toast.success("Document uploaded successfully");
       fetchDocuments();
     } catch (error) {
+      console.error("Failed to upload document:", error);
       toast.error("Failed to upload document");
     } finally {
       setUploading(false);
@@ -94,12 +109,25 @@ const DocumentsPage = () => {
   const handleAnalyze = async (docId) => {
     setAnalyzing(docId);
     try {
-      const response = await axios.post(`${API}/documents/${docId}/analyze`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setDocuments(docs => docs.map(d => d.id === docId ? response.data : d));
+      const response = await axios.post(
+        `${API}/documents/${docId}/analyze`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      const updatedDoc = response.data;
+
+      setDocuments((docs) =>
+        (Array.isArray(docs) ? docs : []).map((doc) =>
+          doc.id === docId ? updatedDoc : doc
+        )
+      );
+
       toast.success("Document analyzed successfully");
     } catch (error) {
+      console.error("Failed to analyze document:", error);
       toast.error("Failed to analyze document");
     } finally {
       setAnalyzing(null);
@@ -111,9 +139,14 @@ const DocumentsPage = () => {
       await axios.delete(`${API}/documents/${docId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setDocuments(docs => docs.filter(d => d.id !== docId));
+
+      setDocuments((docs) =>
+        (Array.isArray(docs) ? docs : []).filter((doc) => doc.id !== docId)
+      );
+
       toast.success("Document deleted");
     } catch (error) {
+      console.error("Failed to delete document:", error);
       toast.error("Failed to delete document");
     }
   };
@@ -123,8 +156,8 @@ const DocumentsPage = () => {
     setViewDialogOpen(true);
   };
 
-  const filteredDocs = documents.filter(doc =>
-    doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredDocs = (Array.isArray(documents) ? documents : []).filter((doc) =>
+    (doc?.name || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getFileIcon = (fileType) => {
@@ -135,16 +168,19 @@ const DocumentsPage = () => {
 
   return (
     <div className="space-y-6" data-testid="documents-page">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <h1
+            className="text-3xl font-bold tracking-tight"
+            style={{ fontFamily: "Outfit, sans-serif" }}
+          >
             Documents
           </h1>
           <p className="text-muted-foreground mt-1">
             Upload and analyze your legal documents with AI
           </p>
         </div>
+
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -156,6 +192,7 @@ const DocumentsPage = () => {
               data-testid="document-search"
             />
           </div>
+
           <Button className="glow-button" disabled={uploading} asChild>
             <label className="cursor-pointer">
               {uploading ? (
@@ -176,7 +213,6 @@ const DocumentsPage = () => {
         </div>
       </div>
 
-      {/* Documents Grid */}
       {loading ? (
         <AILoadingState message="Loading your documents..." />
       ) : filteredDocs.length === 0 ? (
@@ -206,41 +242,57 @@ const DocumentsPage = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDocs.map((doc) => (
-            <Card key={doc.id} className="group hover:border-primary/50 transition-all duration-300" data-testid={`document-card-${doc.id}`}>
+            <Card
+              key={doc.id}
+              className="group hover:border-primary/50 transition-all duration-300"
+              data-testid={`document-card-${doc.id}`}
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-11 w-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-xl group-hover:scale-105 transition-transform">
                       {getFileIcon(doc.file_type)}
                     </div>
+
                     <div className="min-w-0">
                       <CardTitle className="text-base truncate" title={doc.name}>
                         {doc.name}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(doc.created_at).toLocaleDateString()}
+                        {doc.created_at
+                          ? new Date(doc.created_at).toLocaleDateString()
+                          : ""}
                       </p>
                     </div>
                   </div>
-                  <Badge 
+
+                  <Badge
                     variant={doc.analyzed ? "default" : "secondary"}
-                    className={doc.analyzed ? "bg-green-500/20 text-green-400 border-green-500/30" : ""}
+                    className={
+                      doc.analyzed
+                        ? "bg-green-500/20 text-green-400 border-green-500/30"
+                        : ""
+                    }
                   >
                     {doc.analyzed ? (
                       <span className="flex items-center gap-1">
                         <Sparkles className="h-3 w-3" />
                         Analyzed
                       </span>
-                    ) : "Pending"}
+                    ) : (
+                      "Pending"
+                    )}
                   </Badge>
                 </div>
               </CardHeader>
+
               <CardContent className="pt-0">
                 {doc.analyzed && doc.summary && (
                   <p className="text-sm text-muted-foreground line-clamp-2 mb-4 leading-relaxed">
                     {doc.summary}
                   </p>
                 )}
+
                 <div className="flex items-center gap-2">
                   {!doc.analyzed ? (
                     <Button
@@ -274,6 +326,7 @@ const DocumentsPage = () => {
                       View Analysis
                     </Button>
                   )}
+
                   <Button
                     size="sm"
                     variant="ghost"
@@ -290,7 +343,6 @@ const DocumentsPage = () => {
         </div>
       )}
 
-      {/* View Analysis Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-card z-10">
@@ -299,7 +351,10 @@ const DocumentsPage = () => {
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }} className="text-lg">
+                <DialogTitle
+                  style={{ fontFamily: "Outfit, sans-serif" }}
+                  className="text-lg"
+                >
                   {selectedDoc?.name}
                 </DialogTitle>
                 <DialogDescription className="text-xs mt-0.5">
@@ -308,12 +363,11 @@ const DocumentsPage = () => {
               </div>
             </div>
           </DialogHeader>
-          
+
           {selectedDoc && (
             <div className="p-6 space-y-5">
-              {/* Summary */}
-              <AISection 
-                title="Summary" 
+              <AISection
+                title="Summary"
                 icon={FileText}
                 iconColor="text-primary"
               >
@@ -322,10 +376,9 @@ const DocumentsPage = () => {
                 </p>
               </AISection>
 
-              {/* Simple Explanation */}
               {selectedDoc.simple_explanation && (
-                <AISection 
-                  title="In Simple Terms" 
+                <AISection
+                  title="In Simple Terms"
                   icon={CheckCircle}
                   iconColor="text-green-500"
                   variant="success"
@@ -336,10 +389,9 @@ const DocumentsPage = () => {
                 </AISection>
               )}
 
-              {/* Key Points */}
               {selectedDoc.key_points && selectedDoc.key_points.length > 0 && (
-                <AISection 
-                  title="Key Points" 
+                <AISection
+                  title="Key Points"
                   icon={ListChecks}
                   iconColor="text-primary"
                 >
@@ -347,10 +399,9 @@ const DocumentsPage = () => {
                 </AISection>
               )}
 
-              {/* Risks */}
               {selectedDoc.risks && selectedDoc.risks.length > 0 && (
-                <AISection 
-                  title="Potential Risks" 
+                <AISection
+                  title="Potential Risks"
                   icon={AlertTriangle}
                   iconColor="text-amber-500"
                   variant="warning"
@@ -363,22 +414,20 @@ const DocumentsPage = () => {
                 </AISection>
               )}
 
-              {/* Obligations */}
               {selectedDoc.obligations && selectedDoc.obligations.length > 0 && (
-                <AISection 
-                  title="Your Obligations" 
+                <AISection
+                  title="Your Obligations"
                   icon={Shield}
                   iconColor="text-primary"
                 >
-                  <AIBulletList 
-                    items={selectedDoc.obligations} 
+                  <AIBulletList
+                    items={selectedDoc.obligations}
                     icon={CheckCircle}
                     iconColor="text-primary"
                   />
                 </AISection>
               )}
 
-              {/* What This Means For You */}
               <WhatThisMeansSection content={selectedDoc.what_this_means} />
             </div>
           )}
