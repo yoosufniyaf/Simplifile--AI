@@ -13,7 +13,6 @@ import {
   Bell,
   Shield,
   Check,
-  Crown,
   Zap,
   FileText,
 } from "lucide-react";
@@ -27,7 +26,7 @@ const fallbackPlans = [
     id: "basic",
     name: "Basic Advisor",
     monthly_price: 9.99,
-    annual_price: 89.91,
+    annual_price: 71.93, // 40% off from 119.88
     monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
     annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
     features: [
@@ -40,8 +39,8 @@ const fallbackPlans = [
   {
     id: "premium",
     name: "Premium",
-    monthly_price: 29.99,
-    annual_price: 269.91,
+    monthly_price: 39.99,
+    annual_price: 287.93, // 40% off from 479.88
     monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
     annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
     features: [
@@ -50,24 +49,13 @@ const fallbackPlans = [
       "Transaction Categorization",
       "P&L, Monthly Summary",
       "MRR, Burn Rate, CAC Insights",
-    ],
-    popular: true,
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    monthly_price: 49.99,
-    annual_price: 449.91,
-    monthly_checkout_url: "https://whop.com/checkout/plan_HxIPDg1O5ClHn",
-    annual_checkout_url: "https://whop.com/checkout/plan_1nnO8tkh9GCCd",
-    features: [
-      "Everything in Premium",
       "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
       "Financial Statements Auto-Generated",
       "Manual Editing & Custom Entries",
       "PDF/CSV Export",
       "AI Tax Insights",
     ],
+    popular: true,
   },
 ];
 
@@ -108,7 +96,40 @@ const SettingsPage = () => {
       try {
         const response = await axios.get(`${API}/subscription/plans`);
         const apiPlans = Array.isArray(response?.data?.plans)
-          ? response.data.plans.map(normalizePlan)
+          ? response.data.plans
+              .filter((plan) => plan?.id !== "enterprise")
+              .map((plan) => {
+                if (plan?.id === "premium") {
+                  return normalizePlan({
+                    ...plan,
+                    monthly_price: 39.99,
+                    annual_price: 287.93,
+                    features: [
+                      "Everything in Basic",
+                      "AI Bookkeeper Assistant",
+                      "Transaction Categorization",
+                      "P&L, Monthly Summary",
+                      "MRR, Burn Rate, CAC Insights",
+                      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
+                      "Financial Statements Auto-Generated",
+                      "Manual Editing & Custom Entries",
+                      "PDF/CSV Export",
+                      "AI Tax Insights",
+                    ],
+                    popular: true,
+                  });
+                }
+
+                if (plan?.id === "basic") {
+                  return normalizePlan({
+                    ...plan,
+                    monthly_price: 9.99,
+                    annual_price: 71.93,
+                  });
+                }
+
+                return normalizePlan(plan);
+              })
           : [];
 
         setPlans(apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan));
@@ -157,8 +178,6 @@ const SettingsPage = () => {
 
   const getPlanIcon = (planId) => {
     switch (planId) {
-      case "enterprise":
-        return <Crown className="h-5 w-5" />;
       case "premium":
         return <Zap className="h-5 w-5" />;
       default:
@@ -176,7 +195,6 @@ const SettingsPage = () => {
 
   return (
     <div className="space-y-8 max-w-4xl" data-testid="settings-page">
-      {/* Header */}
       <div>
         <h1
           className="text-3xl font-bold tracking-tight"
@@ -189,7 +207,6 @@ const SettingsPage = () => {
         </p>
       </div>
 
-      {/* Profile Section */}
       <Card>
         <CardHeader>
           <CardTitle
@@ -231,7 +248,6 @@ const SettingsPage = () => {
         </CardContent>
       </Card>
 
-      {/* Subscription Section */}
       <Card>
         <CardHeader>
           <CardTitle
@@ -245,7 +261,6 @@ const SettingsPage = () => {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Billing Toggle */}
           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
             <div className="flex items-center gap-4">
               <span className={!isAnnual ? "font-medium" : "text-muted-foreground"}>
@@ -264,12 +279,11 @@ const SettingsPage = () => {
             </div>
 
             {isAnnual && (
-              <Badge className="bg-green-500/20 text-green-400">Save 25%</Badge>
+              <Badge className="bg-green-500/20 text-green-400">Save 40%</Badge>
             )}
           </div>
 
-          {/* Plan Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {plans.map((plan) => {
               const isCurrentPlan = plan.id === user?.plan;
 
@@ -347,7 +361,6 @@ const SettingsPage = () => {
         </CardContent>
       </Card>
 
-      {/* Notifications Section */}
       <Card>
         <CardHeader>
           <CardTitle
@@ -397,7 +410,6 @@ const SettingsPage = () => {
         </CardContent>
       </Card>
 
-      {/* Security Section */}
       <Card>
         <CardHeader>
           <CardTitle
