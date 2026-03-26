@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -64,6 +64,9 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
 class UserResponse(BaseModel):
     id: str
@@ -385,6 +388,17 @@ async def login(credentials: UserLogin):
         access_token=token,
         user=to_user_response(user)
     )
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    user = table_select_one("users", {"email": payload.email})
+
+    if user:
+        logger.info(f"Password reset requested for: {payload.email}")
+
+    return {
+        "message": "If an account exists, a reset link has been sent."
+    }
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
