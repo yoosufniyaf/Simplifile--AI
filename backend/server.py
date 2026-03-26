@@ -68,6 +68,10 @@ class UserLogin(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 class UserResponse(BaseModel):
     id: str
     email: str
@@ -392,7 +396,6 @@ async def login(credentials: UserLogin):
 @api_router.post("/auth/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
     import resend
-    import os
 
     resend.api_key = os.environ.get("RESEND_API_KEY")
 
@@ -405,6 +408,10 @@ async def forgot_password(payload: ForgotPasswordRequest):
     if not user:
         return success_message
 
+    frontend_url = os.environ.get("FRONTEND_URL", "").strip()
+    if not frontend_url:
+        raise HTTPException(status_code=500, detail="FRONTEND_URL is not configured")
+
     reset_token = str(uuid.uuid4())
 
     table_update(
@@ -416,7 +423,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
         }
     )
 
-    reset_link = f"{os.environ.get('FRONTEND_URL')}/reset-password?token={reset_token}"
+    reset_link = f"{frontend_url}/reset-password?token={reset_token}"
 
     try:
         resend.Emails.send({
@@ -431,9 +438,39 @@ async def forgot_password(payload: ForgotPasswordRequest):
             """
         })
     except Exception as e:
-        print("EMAIL ERROR:", e)
+        logger.error(f"EMAIL ERROR: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reset email")
 
     return success_message
+
+@api_router.post("/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest):
+    user = table_select_one("users", {"reset_token": payload.token})
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    expires_at = user.get("reset_token_expires_at")
+    if not expires_at:
+        raise HTTPException(status_code=400, detail="Reset token expired")
+
+    expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_dt:
+        raise HTTPException(status_code=400, detail="Reset token expired")
+
+    hashed_password = hash_password(payload.new_password)
+
+    table_update(
+        "users",
+        {"id": user["id"]},
+        {
+            "password_hash": hashed_password,
+            "reset_token": None,
+            "reset_token_expires_at": None,
+        }
+    )
+
+    return {"message": "Password reset successful"}
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
