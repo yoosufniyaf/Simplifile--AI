@@ -27,7 +27,7 @@ const fallbackPlans = [
     id: "basic",
     name: "Basic Advisor",
     monthly_price: 9.99,
-    annual_price: 71.93, // 40% off from 119.88
+    annual_price: 71.93,
     monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
     annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
     features: [
@@ -41,7 +41,7 @@ const fallbackPlans = [
     id: "premium",
     name: "Premium",
     monthly_price: 39.99,
-    annual_price: 287.93, // 40% off from 479.88
+    annual_price: 287.93,
     monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
     annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
     features: [
@@ -92,6 +92,7 @@ const SettingsPage = () => {
   const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
   const [isAnnual, setIsAnnual] = useState(false);
   const [name, setName] = useState(user?.name || "");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -201,6 +202,46 @@ const SettingsPage = () => {
 
   const handleEnable2FA = () => {
     toast.info("Two-factor authentication setup is coming soon.");
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to permanently delete your account and all your data? This cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    if (!token) {
+      toast.error("You are not logged in.");
+      return;
+    }
+
+    try {
+      setDeletingAccount(true);
+
+      const response = await axios.delete(`${API}/auth/delete-account`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      toast.success(response?.data?.message || "Account deleted successfully.");
+      navigate("/");
+    } catch (error) {
+      console.error("Delete account error:", error);
+
+      const message =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        "Failed to delete account.";
+
+      toast.error(message);
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -485,8 +526,14 @@ const SettingsPage = () => {
                 Permanently delete your account and data
               </p>
             </div>
-            <Button variant="destructive" size="sm" data-testid="delete-account-btn">
-              Delete
+            <Button
+              variant="destructive"
+              size="sm"
+              data-testid="delete-account-btn"
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+            >
+              {deletingAccount ? "Deleting..." : "Delete"}
             </Button>
           </div>
         </CardContent>
