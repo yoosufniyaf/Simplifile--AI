@@ -416,19 +416,19 @@ async def forgot_password(payload: ForgotPasswordRequest):
         }
     )
 
+    reset_link = f"{os.environ.get('FRONTEND_URL')}/reset-password?token={reset_token}"
+
     try:
         resend.Emails.send({
             "from": "onboarding@resend.dev",
             "to": [payload.email],
             "subject": "Reset your password",
-            reset_link = f"{os.environ.get('FRONTEND_URL')}/reset-password?token={reset_token}"
-
-"html": f"""
-    <h2>Reset your password</h2>
-    <p>Click below:</p>
-    <a href="{reset_link}">Reset Password</a>
-    <p>This link expires in 1 hour.</p>
-"""
+            "html": f"""
+                <h2>Reset your password</h2>
+                <p>Click below:</p>
+                <a href="{reset_link}">Reset Password</a>
+                <p>This link expires in 1 hour.</p>
+            """
         })
     except Exception as e:
         print("EMAIL ERROR:", e)
