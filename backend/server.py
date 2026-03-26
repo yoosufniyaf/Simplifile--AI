@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request, Body
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -475,6 +475,29 @@ async def reset_password(payload: ResetPasswordRequest):
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
     return to_user_response(user)
+
+@api_router.delete("/auth/delete-account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+
+    try:
+        table_delete("documents", {"user_id": user_id})
+        table_delete("chats", {"user_id": user_id})
+        table_delete("transactions", {"user_id": user_id})
+        table_delete("integrations", {"user_id": user_id})
+        table_delete("tax_insights", {"user_id": user_id})
+
+        deleted_user = table_delete("users", {"id": user_id})
+
+        if not deleted_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return {"message": "Account deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"DELETE ACCOUNT ERROR: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete account")
 
 # ==================== SUBSCRIPTION / TRIAL ROUTES ====================
 
