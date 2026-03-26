@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import DashboardLayout from "./layouts/DashboardLayout";
 import DashboardPage from "./pages/DashboardPage";
 import DocumentsPage from "./pages/DocumentsPage";
@@ -18,7 +19,6 @@ import PricingPage from "./pages/PricingPage";
 const ProtectedRoute = ({ children }) => {
   const { user, loading, token } = useAuth();
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -27,13 +27,10 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  // Not logged in → go to login
   if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  // 🚨 THIS IS THE IMPORTANT FIX
-  // Logged in but NO trial or subscription → go to pricing
   if (
     user?.subscription_status !== "trial" &&
     user?.subscription_status !== "active"
@@ -41,7 +38,6 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/pricing" replace />;
   }
 
-  // Allowed
   return children;
 };
 
@@ -50,13 +46,12 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-          {/* Protected routes */}
           <Route
             path="/dashboard"
             element={
