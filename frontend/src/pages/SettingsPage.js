@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -84,6 +85,7 @@ const normalizePlan = (plan) => {
 };
 
 const SettingsPage = () => {
+  const navigate = useNavigate();
   const auth = useAuth() || {};
   const { user, token } = auth;
 
@@ -194,7 +196,7 @@ const SettingsPage = () => {
   };
 
   const handleChangePassword = () => {
-    toast.info("Password reset page is not set up yet.");
+    navigate("/forgot-password");
   };
 
   const handleEnable2FA = () => {
