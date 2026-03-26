@@ -15,7 +15,7 @@ const fallbackPlans = [
     id: "basic",
     name: "Basic Advisor",
     monthly_price: 9.99,
-    annual_price: 71.93, // 40% off
+    annual_price: 71.88, // ✅ FIXED
     monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
     annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
     features: [
@@ -29,7 +29,7 @@ const fallbackPlans = [
     id: "premium",
     name: "Premium",
     monthly_price: 39.99,
-    annual_price: 287.93, // 40% off from 39.99 * 12 = 479.88
+    annual_price: 287.93,
     monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
     annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
     features: [
@@ -87,7 +87,7 @@ const PricingPage = () => {
         const response = await axios.get(`${API}/subscription/plans`);
         const apiPlans = Array.isArray(response?.data?.plans)
           ? response.data.plans
-              .filter((p) => p.id !== "enterprise") // 🔥 removes enterprise if backend still sends it
+              .filter((p) => p.id !== "enterprise")
               .map(normalizePlan)
           : [];
 
@@ -205,10 +205,7 @@ const PricingPage = () => {
                 ))}
               </ul>
 
-              <Button
-                className="w-full"
-                onClick={() => handlePlanClick(plan)}
-              >
+              <Button className="w-full" onClick={() => handlePlanClick(plan)}>
                 Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
