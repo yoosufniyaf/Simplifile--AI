@@ -391,14 +391,46 @@ async def login(credentials: UserLogin):
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
+    import resend
+    import os
+
+    resend.api_key = os.environ.get("RESEND_API_KEY")
+
     user = table_select_one("users", {"email": payload.email})
 
-    if user:
-        logger.info(f"Password reset requested for: {payload.email}")
-
-    return {
+    success_message = {
         "message": "If an account exists, a reset link has been sent."
     }
+
+    if not user:
+        return success_message
+
+    reset_token = str(uuid.uuid4())
+
+    table_update(
+        "users",
+        {"id": user["id"]},
+        {
+            "reset_token": reset_token,
+            "reset_token_expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        }
+    )
+
+    try:
+        resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": [payload.email],
+            "subject": "Reset your password",
+            "html": f"""
+                <h2>Reset your password</h2>
+                <p>Click below:</p>
+                <a href="https://google.com">Reset Password</a>
+            """
+        })
+    except Exception as e:
+        print("EMAIL ERROR:", e)
+
+    return success_message
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
