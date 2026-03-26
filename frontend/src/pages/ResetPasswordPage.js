@@ -51,18 +51,31 @@ const ResetPasswordPage = () => {
     try {
       setLoading(true);
 
-      await axios.post(`${API}/auth/reset-password`, {
+      const response = await axios.post(`${API}/auth/reset-password`, {
         token,
         new_password: newPassword,
       });
 
-      toast.success("Password reset successful. Please log in.");
-      navigate("/login");
-    } catch (error) {
-      console.error("Reset password failed:", error);
-      toast.error(
-        error?.response?.data?.detail || "Could not reset password."
+      console.log("RESET PASSWORD SUCCESS:", response.data);
+      toast.success(
+        response?.data?.message || "Password reset successful. Please log in."
       );
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 1000);
+    } catch (error) {
+      console.error("RESET PASSWORD FULL ERROR:", error);
+      console.log("RESET PASSWORD RESPONSE DATA:", error?.response?.data);
+      console.log("RESET PASSWORD RESPONSE STATUS:", error?.response?.status);
+
+      const backendMessage =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Could not reset password.";
+
+      toast.error(backendMessage);
     } finally {
       setLoading(false);
     }
