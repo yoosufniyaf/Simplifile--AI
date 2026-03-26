@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
@@ -15,7 +15,8 @@ const fallbackPlans = [
     id: "basic",
     name: "Basic Advisor",
     monthly_price: 9.99,
-    annual_price: 71.88, // ✅ FIXED
+    annual_monthly_price: 5.99,
+    annual_price: 71.88,
     monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
     annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
     features: [
@@ -29,7 +30,8 @@ const fallbackPlans = [
     id: "premium",
     name: "Premium",
     monthly_price: 39.99,
-    annual_price: 287.93,
+    annual_monthly_price: 23.99,
+    annual_price: 287.88,
     monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
     annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
     features: [
@@ -55,6 +57,9 @@ const normalizePlan = (plan) => {
     id: plan?.id || fallbackPlan?.id || "plan",
     name: plan?.name || fallbackPlan?.name || "Plan",
     monthly_price: Number(plan?.monthly_price ?? fallbackPlan?.monthly_price ?? 0),
+    annual_monthly_price: Number(
+      plan?.annual_monthly_price ?? fallbackPlan?.annual_monthly_price ?? 0
+    ),
     annual_price: Number(plan?.annual_price ?? fallbackPlan?.annual_price ?? 0),
     features: Array.isArray(plan?.features)
       ? plan.features
@@ -88,7 +93,40 @@ const PricingPage = () => {
         const apiPlans = Array.isArray(response?.data?.plans)
           ? response.data.plans
               .filter((p) => p.id !== "enterprise")
-              .map(normalizePlan)
+              .map((plan) => {
+                if (plan.id === "basic") {
+                  return normalizePlan({
+                    ...plan,
+                    monthly_price: 9.99,
+                    annual_monthly_price: 5.99,
+                    annual_price: 71.88,
+                  });
+                }
+
+                if (plan.id === "premium") {
+                  return normalizePlan({
+                    ...plan,
+                    monthly_price: 39.99,
+                    annual_monthly_price: 23.99,
+                    annual_price: 287.88,
+                    features: [
+                      "Everything in Basic",
+                      "AI Bookkeeper Assistant",
+                      "Transaction Categorization",
+                      "P&L, Monthly Summary",
+                      "MRR, Burn Rate, CAC Insights",
+                      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
+                      "Financial Statements Auto-Generated",
+                      "Manual Editing & Custom Entries",
+                      "PDF & CSV Export",
+                      "AI Tax Insights & Planning",
+                    ],
+                    popular: true,
+                  });
+                }
+
+                return normalizePlan(plan);
+              })
           : [];
 
         setPlans(apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan));
@@ -105,7 +143,7 @@ const PricingPage = () => {
 
   const getPrice = (plan) => {
     if (isAnnual) {
-      return (Number(plan.annual_price || 0) / 12).toFixed(2);
+      return Number(plan.annual_monthly_price || 0).toFixed(2);
     }
     return Number(plan.monthly_price || 0).toFixed(2);
   };
@@ -183,24 +221,32 @@ const PricingPage = () => {
                 </span>
               )}
 
-              <h3 className="text-2xl font-semibold mb-2">{plan.name}</h3>
+              <div className="mb-6">
+                <div className="flex justify-center mb-4">
+                  <div className={plan.popular ? "text-primary" : "text-primary/80"}>
+                    {getPlanIcon(plan.id)}
+                  </div>
+                </div>
 
-              <p className="text-4xl font-bold mb-6">
-                ${getPrice(plan)}
-                <span className="text-sm text-muted-foreground"> /month</span>
-              </p>
+                <h3 className="text-2xl font-semibold mb-2">{plan.name}</h3>
 
-              {isAnnual && (
-                <p className="text-sm text-muted-foreground mb-4">
-                  ${getTotalPrice(plan)} billed annually
+                <p className="text-4xl font-bold mb-2">
+                  ${getPrice(plan)}
+                  <span className="text-sm text-muted-foreground"> /month</span>
                 </p>
-              )}
 
-              <ul className="space-y-3 mb-6">
+                {isAnnual && (
+                  <p className="text-sm text-muted-foreground mb-4">
+                    ${getTotalPrice(plan)} billed annually
+                  </p>
+                )}
+              </div>
+
+              <ul className="space-y-3 mb-6 text-left">
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex gap-2">
-                    <Check className="h-5 w-5 text-primary" />
-                    {feature}
+                    <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                    <span>{feature}</span>
                   </li>
                 ))}
               </ul>
