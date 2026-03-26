@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -84,6 +85,7 @@ const normalizePlan = (plan) => {
 };
 
 const SettingsPage = () => {
+  const navigate = useNavigate();
   const auth = useAuth() || {};
   const { user, token } = auth;
 
@@ -191,6 +193,14 @@ const SettingsPage = () => {
     const now = new Date();
     const diff = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
     return Math.max(0, diff);
+  };
+
+  const handleChangePassword = () => {
+    navigate("/forgot-password");
+  };
+
+  const handleEnable2FA = () => {
+    toast.info("Two-factor authentication setup is coming soon.");
   };
 
   return (
@@ -439,7 +449,12 @@ const SettingsPage = () => {
               <p className="font-medium">Change Password</p>
               <p className="text-sm text-muted-foreground">Update your account password</p>
             </div>
-            <Button variant="outline" size="sm" data-testid="change-password-btn">
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="change-password-btn"
+              onClick={handleChangePassword}
+            >
               Change
             </Button>
           </div>
@@ -451,7 +466,12 @@ const SettingsPage = () => {
               <p className="font-medium">Two-Factor Authentication</p>
               <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
             </div>
-            <Button variant="outline" size="sm" data-testid="2fa-btn">
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="2fa-btn"
+              onClick={handleEnable2FA}
+            >
               Enable
             </Button>
           </div>
