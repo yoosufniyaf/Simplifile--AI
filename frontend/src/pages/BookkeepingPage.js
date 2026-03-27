@@ -28,14 +28,13 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import {
-  AISection,
   AIAnalysisCard,
   AILoadingState,
-  AIEmptyState
+  AIEmptyState,
 } from "../components/ui/ai-components";
-import { 
-  Calculator, 
-  Upload, 
+import {
+  Calculator,
+  Upload,
   Plus,
   TrendingUp,
   TrendingDown,
@@ -45,7 +44,7 @@ import {
   Trash2,
   Lock,
   BarChart3,
-  Zap
+  Zap,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -59,38 +58,52 @@ const CATEGORIES = [
   "hosting",
   "infrastructure",
   "salary",
-  "other"
+  "other",
 ];
 
-// Metric Card Component
 const MetricCard = ({ label, value, sublabel, icon: Icon, trend, color = "primary" }) => {
   const colors = {
     primary: "bg-primary/10 border-primary/20 text-primary",
     green: "bg-green-500/10 border-green-500/20 text-green-500",
     red: "bg-red-500/10 border-red-500/20 text-red-500",
-    amber: "bg-amber-500/10 border-amber-500/20 text-amber-500"
+    amber: "bg-amber-500/10 border-amber-500/20 text-amber-500",
   };
 
   return (
-    <Card className={colors[color].split(' ').slice(0, 2).join(' ')}>
+    <Card className={colors[color].split(" ").slice(0, 2).join(" ")}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-muted-foreground mb-1">{label}</p>
-            <p className={`text-2xl font-bold ${colors[color].split(' ')[2]}`} style={{ fontFamily: 'Outfit, sans-serif' }}>
+            <p
+              className={`text-2xl font-bold ${colors[color].split(" ")[2]}`}
+              style={{ fontFamily: "Outfit, sans-serif" }}
+            >
               {value}
             </p>
             {sublabel && <p className="text-xs text-muted-foreground mt-1">{sublabel}</p>}
           </div>
           {Icon && (
-            <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${colors[color].split(' ')[0]}`}>
-              <Icon className={`h-5 w-5 ${colors[color].split(' ')[2]}`} />
+            <div
+              className={`h-10 w-10 rounded-xl flex items-center justify-center ${
+                colors[color].split(" ")[0]
+              }`}
+            >
+              <Icon className={`h-5 w-5 ${colors[color].split(" ")[2]}`} />
             </div>
           )}
         </div>
-        {trend && (
-          <div className={`flex items-center gap-1 mt-2 text-xs ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+        {typeof trend === "number" && (
+          <div
+            className={`flex items-center gap-1 mt-2 text-xs ${
+              trend > 0 ? "text-green-500" : "text-red-500"
+            }`}
+          >
+            {trend > 0 ? (
+              <TrendingUp className="h-3 w-3" />
+            ) : (
+              <TrendingDown className="h-3 w-3" />
+            )}
             <span>{Math.abs(trend)}% from last period</span>
           </div>
         )}
@@ -113,7 +126,7 @@ const BookkeepingPage = () => {
     amount: "",
     category: "other",
     date: new Date().toISOString().split("T")[0],
-    type: "expense"
+    type: "expense",
   });
 
   const hasPremiumAccess = checkPlanAccess("premium");
@@ -124,13 +137,15 @@ const BookkeepingPage = () => {
       setLoading(false);
       return;
     }
+
     try {
       const response = await axios.get(`${API}/bookkeeping/transactions`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setTransactions(response.data);
+      setTransactions(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -138,13 +153,15 @@ const BookkeepingPage = () => {
 
   const fetchInsights = useCallback(async () => {
     if (!hasPremiumAccess) return;
+
     try {
       const response = await axios.get(`${API}/bookkeeping/insights`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setInsights(response.data);
+      setInsights(response.data || null);
     } catch (error) {
       console.error("Failed to fetch insights:", error);
+      setInsights(null);
     }
   }, [token, hasPremiumAccess]);
 
@@ -153,26 +170,37 @@ const BookkeepingPage = () => {
     fetchInsights();
   }, [fetchTransactions, fetchInsights]);
 
+  const resetForm = () => {
+    setFormData({
+      description: "",
+      amount: "",
+      category: "other",
+      date: new Date().toISOString().split("T")[0],
+      type: "expense",
+    });
+    setSelectedTransaction(null);
+  };
+
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("file", file);
+    const uploadData = new FormData();
+    uploadData.append("file", file);
 
     setUploading(true);
     try {
-      const response = await axios.post(`${API}/bookkeeping/upload`, formData, {
-        headers: { 
+      const response = await axios.post(`${API}/bookkeeping/upload`, uploadData, {
+        headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data"
-        }
+          "Content-Type": "multipart/form-data",
+        },
       });
       toast.success(`Imported ${response.data.count} transactions`);
-      fetchTransactions();
-      fetchInsights();
+      await fetchTransactions();
+      await fetchInsights();
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to import file");
+      toast.error(error?.response?.data?.detail || "Failed to import file");
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -180,22 +208,28 @@ const BookkeepingPage = () => {
   };
 
   const handleAddTransaction = async () => {
+    if (!formData.description || !formData.amount) {
+      toast.error("Please fill in description and amount");
+      return;
+    }
+
     try {
       await axios.post(
         `${API}/bookkeeping/transactions`,
         {
           ...formData,
-          amount: parseFloat(formData.amount)
+          amount: parseFloat(formData.amount),
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       toast.success("Transaction added");
       setAddDialogOpen(false);
       resetForm();
-      fetchTransactions();
-      fetchInsights();
+      await fetchTransactions();
+      await fetchInsights();
     } catch (error) {
-      toast.error("Failed to add transaction");
+      toast.error(error?.response?.data?.detail || "Failed to add transaction");
     }
   };
 
@@ -204,22 +238,26 @@ const BookkeepingPage = () => {
       toast.error("Enterprise plan required for editing");
       return;
     }
+
+    if (!selectedTransaction) return;
+
     try {
       await axios.put(
         `${API}/bookkeeping/transactions/${selectedTransaction.id}`,
         {
           ...formData,
-          amount: parseFloat(formData.amount)
+          amount: parseFloat(formData.amount),
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       toast.success("Transaction updated");
       setEditDialogOpen(false);
       resetForm();
-      fetchTransactions();
-      fetchInsights();
+      await fetchTransactions();
+      await fetchInsights();
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to update transaction");
+      toast.error(error?.response?.data?.detail || "Failed to update transaction");
     }
   };
 
@@ -228,39 +266,29 @@ const BookkeepingPage = () => {
       toast.error("Enterprise plan required for deleting");
       return;
     }
+
     try {
       await axios.delete(`${API}/bookkeeping/transactions/${transId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Transaction deleted");
-      fetchTransactions();
-      fetchInsights();
+      await fetchTransactions();
+      await fetchInsights();
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to delete transaction");
+      toast.error(error?.response?.data?.detail || "Failed to delete transaction");
     }
   };
 
   const openEditDialog = (trans) => {
     setSelectedTransaction(trans);
     setFormData({
-      description: trans.description,
-      amount: Math.abs(trans.amount).toString(),
-      category: trans.category,
-      date: trans.date,
-      type: trans.type
+      description: trans.description || "",
+      amount: Math.abs(trans.amount || 0).toString(),
+      category: trans.category || "other",
+      date: trans.date || new Date().toISOString().split("T")[0],
+      type: trans.type || "expense",
     });
     setEditDialogOpen(true);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      description: "",
-      amount: "",
-      category: "other",
-      date: new Date().toISOString().split("T")[0],
-      type: "expense"
-    });
-    setSelectedTransaction(null);
   };
 
   const getCategoryColor = (category) => {
@@ -271,7 +299,7 @@ const BookkeepingPage = () => {
       hosting: "bg-green-500/20 text-green-400 border-green-500/30",
       infrastructure: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
       salary: "bg-pink-500/20 text-pink-400 border-pink-500/30",
-      other: "bg-gray-500/20 text-gray-400 border-gray-500/30"
+      other: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     };
     return colors[category] || colors.other;
   };
@@ -282,13 +310,14 @@ const BookkeepingPage = () => {
         <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
           <Lock className="h-8 w-8 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+        <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
           Premium Feature
         </h2>
         <p className="text-muted-foreground mb-6 max-w-md text-sm">
-          Upgrade to Premium to access AI-powered bookkeeping, automatic transaction categorization, and financial insights.
+          Upgrade to Premium to access AI-powered bookkeeping, automatic transaction categorization,
+          and financial insights.
         </p>
-        <Button className="glow-button" onClick={() => window.location.href = "/dashboard/settings"}>
+        <Button className="glow-button" onClick={() => (window.location.href = "/dashboard/settings")}>
           <Zap className="mr-2 h-4 w-4" />
           Upgrade to Premium
         </Button>
@@ -298,16 +327,16 @@ const BookkeepingPage = () => {
 
   return (
     <div className="space-y-6" data-testid="bookkeeping-page">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "Outfit, sans-serif" }}>
             Bookkeeping
           </h1>
           <p className="text-muted-foreground mt-1">
             Track and categorize your business transactions
           </p>
         </div>
+
         <div className="flex items-center gap-3">
           <Button variant="outline" disabled={uploading} asChild>
             <label className="cursor-pointer">
@@ -326,84 +355,86 @@ const BookkeepingPage = () => {
               />
             </label>
           </Button>
-          <Button className="glow-button" onClick={() => setAddDialogOpen(true)} data-testid="add-transaction-btn">
+
+          <Button
+            className="glow-button"
+            onClick={() => {
+              resetForm();
+              setAddDialogOpen(true);
+            }}
+            data-testid="add-transaction-btn"
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add Transaction
           </Button>
         </div>
       </div>
 
-      {/* Key Metrics */}
       {insights && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
             label="MRR"
-            value={`$${insights.mrr.toLocaleString()}`}
+            value={`$${(insights.mrr || 0).toLocaleString()}`}
             sublabel="Monthly Recurring"
             icon={BarChart3}
             color="primary"
           />
           <MetricCard
             label="Burn Rate"
-            value={`$${insights.burn_rate.toLocaleString()}`}
+            value={`$${(insights.burn_rate || 0).toLocaleString()}`}
             sublabel="Per Month"
             icon={TrendingDown}
             color="amber"
           />
           <MetricCard
             label="Runway"
-            value={`${insights.runway_months} mo`}
+            value={`${insights.runway_months || 0} mo`}
             sublabel="Estimated"
             icon={Calculator}
             color="primary"
           />
           <MetricCard
             label="Profit Margin"
-            value={`${insights.profit_margin}%`}
+            value={`${insights.profit_margin || 0}%`}
             sublabel="Net"
-            icon={insights.profit_margin >= 0 ? TrendingUp : TrendingDown}
-            color={insights.profit_margin >= 0 ? "green" : "red"}
+            icon={(insights.profit_margin || 0) >= 0 ? TrendingUp : TrendingDown}
+            color={(insights.profit_margin || 0) >= 0 ? "green" : "red"}
           />
         </div>
       )}
 
-      {/* Summary Cards */}
       {insights && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MetricCard
             label="Total Income"
-            value={`$${insights.total_income.toLocaleString()}`}
+            value={`$${(insights.total_income || 0).toLocaleString()}`}
             icon={TrendingUp}
             color="green"
           />
           <MetricCard
             label="Total Expenses"
-            value={`$${insights.total_expenses.toLocaleString()}`}
+            value={`$${(insights.total_expenses || 0).toLocaleString()}`}
             icon={TrendingDown}
             color="red"
           />
           <MetricCard
             label="Net Profit"
-            value={`$${insights.net_profit.toLocaleString()}`}
+            value={`$${(insights.net_profit || 0).toLocaleString()}`}
             icon={DollarSign}
-            color={insights.net_profit >= 0 ? "primary" : "amber"}
+            color={(insights.net_profit || 0) >= 0 ? "primary" : "amber"}
           />
         </div>
       )}
 
-      {/* AI Financial Analysis */}
       {insights?.ai_analysis && (
-        <AIAnalysisCard 
-          content={insights.ai_analysis} 
-          title="AI Financial Analysis"
-        />
+        <AIAnalysisCard content={insights.ai_analysis} title="AI Financial Analysis" />
       )}
 
-      {/* Transactions Table */}
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Transactions</CardTitle>
+          <CardTitle style={{ fontFamily: "Outfit, sans-serif" }}>Transactions</CardTitle>
         </CardHeader>
+
         <CardContent>
           {loading ? (
             <AILoadingState message="Loading transactions..." />
@@ -434,27 +465,39 @@ const BookkeepingPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableHead className="font-semibold">Date</TableHead>
-                      <TableHead className="font-semibold">Description</TableHead>
-                      <TableHead className="font-semibold">Category</TableHead>
-                      <TableHead className="text-right font-semibold">Amount</TableHead>
-                      <TableHead className="text-right font-semibold">Actions</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {transactions.map((trans) => (
-                      <TableRow key={trans.id} className="group" data-testid={`transaction-row-${trans.id}`}>
+                      <TableRow key={trans.id} className="group">
                         <TableCell className="text-muted-foreground">
                           {new Date(trans.date).toLocaleDateString()}
                         </TableCell>
-                        <TableCell className="font-medium">{trans.description}</TableCell>
                         <TableCell>
-                          <Badge className={getCategoryColor(trans.category)} variant="secondary">
+                          <div>
+                            <p className="font-medium">{trans.description}</p>
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {trans.source || "manual"}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getCategoryColor(trans.category)}>
                             {trans.category}
                           </Badge>
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${trans.type === "income" ? "text-green-500" : "text-red-500"}`}>
-                          {trans.type === "income" ? "+" : "-"}${Math.abs(trans.amount).toLocaleString()}
+                        <TableCell
+                          className={`text-right font-semibold ${
+                            trans.type === "income" ? "text-green-500" : "text-red-500"
+                          }`}
+                        >
+                          {trans.type === "income" ? "+" : "-"}$
+                          {Math.abs(trans.amount).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -485,6 +528,7 @@ const BookkeepingPage = () => {
                   </TableBody>
                 </Table>
               </div>
+
               {!hasEnterpriseAccess && (
                 <p className="text-xs text-muted-foreground mt-4 flex items-center gap-2 px-1">
                   <Lock className="h-3 w-3" />
@@ -496,163 +540,168 @@ const BookkeepingPage = () => {
         </CardContent>
       </Card>
 
-      {/* Add Transaction Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Add Transaction</DialogTitle>
+            <DialogTitle style={{ fontFamily: "Outfit, sans-serif" }}>
+              Add Transaction
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+
+          <div className="space-y-4">
+            <div>
               <Label>Description</Label>
               <Input
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="e.g., AWS Hosting"
-                className="bg-muted/30"
-                data-testid="trans-description-input"
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Transaction description"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Amount</Label>
-                <Input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                  placeholder="0.00"
-                  className="bg-muted/30"
-                  data-testid="trans-amount-input"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, type: v }))}
-                >
-                  <SelectTrigger className="bg-muted/30" data-testid="trans-type-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="income">Income</SelectItem>
-                    <SelectItem value="expense">Expense</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+            <div>
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={formData.amount}
+                onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
+                placeholder="0.00"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
-                >
-                  <SelectTrigger className="bg-muted/30" data-testid="trans-category-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat} className="capitalize">
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className="bg-muted/30"
-                  data-testid="trans-date-input"
-                />
-              </div>
+
+            <div>
+              <Label>Category</Label>
+              <Select
+                value={formData.category}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Date</Label>
+              <Input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label>Type</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expense">Expense</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddTransaction} data-testid="save-transaction-btn">Add Transaction</Button>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddTransaction}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Transaction Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }}>Edit Transaction</DialogTitle>
+            <DialogTitle style={{ fontFamily: "Outfit, sans-serif" }}>
+              Edit Transaction
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+
+          <div className="space-y-4">
+            <div>
               <Label>Description</Label>
               <Input
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                className="bg-muted/30"
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Transaction description"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Amount</Label>
-                <Input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                  className="bg-muted/30"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, type: v }))}
-                >
-                  <SelectTrigger className="bg-muted/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="income">Income</SelectItem>
-                    <SelectItem value="expense">Expense</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+            <div>
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={formData.amount}
+                onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
+                placeholder="0.00"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
-                >
-                  <SelectTrigger className="bg-muted/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat} className="capitalize">
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className="bg-muted/30"
-                />
-              </div>
+
+            <div>
+              <Label>Category</Label>
+              <Select
+                value={formData.category}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Date</Label>
+              <Input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label>Type</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expense">Expense</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleEditTransaction}>Save Changes</Button>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditTransaction}>Update</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
