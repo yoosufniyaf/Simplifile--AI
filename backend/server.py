@@ -903,32 +903,39 @@ async def upload_financial_data(
     transactions = []
 
     try:
-        if file.filename.endswith(".csv"):
+        if file.filename and file.filename.lower().endswith(".csv"):
             text_content = content.decode("utf-8")
             reader = csv.DictReader(io.StringIO(text_content))
+
             for row in reader:
                 trans_id = str(uuid.uuid4())
-                description = row.get("description", row.get("Description", "Unknown"))
+                description = row.get("description") or row.get("Description") or "Unknown"
+                raw_amount = row.get("amount") or row.get("Amount") or 0
+                amount = float(raw_amount)
                 category = await ai_categorize_transaction(description)
-                amount = float(row.get("amount", row.get("Amount", 0)))
 
                 transactions.append({
                     "id": trans_id,
                     "user_id": user["id"],
                     "description": description,
                     "amount": amount,
-                    "category": category,
-                    "date": row.get("date", row.get("Date", now_iso()[:10])),
+                    "category": category or "other",
+                    "date": row.get("date") or row.get("Date") or now_iso()[:10],
                     "type": "expense" if amount < 0 else "income",
                     "source": "csv_import",
                     "created_at": now_iso()
                 })
+        else:
+            raise HTTPException(status_code=400, detail="Only CSV files are supported right now")
 
         table_insert_many("transactions", transactions)
         return {"message": f"Imported {len(transactions)} transactions", "count": len(transactions)}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error parsing file: {e}")
         raise HTTPException(status_code=400, detail="Error parsing file")
+
 
 @api_router.post("/bookkeeping/transactions", response_model=TransactionResponse)
 async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_current_user)):
@@ -951,93 +958,69 @@ async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_
     }
 
     table_insert_one("transactions", trans_doc)
+    return TransactionResponse(**trans_doc)
 
-    return TransactionResponse(
-        id=trans_id,
-        description=trans.description,
-        amount=trans.amount,
-        category=trans.category,
-        date=trans.date,
-        type=trans.type,
-        source="manual",
-        created_at=trans_doc["created_at"]
-    )
 
 @api_router.get("/bookkeeping/transactions", response_model=List[TransactionResponse])
-async def get_transactions(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    category: Optional[str] = None,
+async def get_transactions(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
+
+    rows = table_select(
+        "transactions",
+        filters={"user_id": user["id"]},
+        columns="id,description,amount,category,date,type,source,created_at",
+        order_by="date",
+        ascending=False,
+        limit=1000
+    )
+
+    return [TransactionResponse(**row) for row in rows]
+
+
+@api_router.put("/bookkeeping/transactions/{transaction_id}", response_model=TransactionResponse)
+async def update_transaction(
+    transaction_id: str,
+    trans: TransactionUpdate,
     user: dict = Depends(get_current_user)
 ):
     require_feature_access(user)
 
-    if not check_plan_access(user, "premium"):
-        raise HTTPException(status_code=403, detail="Premium plan required")
-
-    filters: Dict[str, Any] = {"user_id": user["id"]}
-    if start_date:
-        filters["date"] = {"gte": start_date}
-    if end_date:
-        filters.setdefault("date", {})
-        if isinstance(filters["date"], dict):
-            filters["date"]["lte"] = end_date
-    if category:
-        filters["category"] = category
-
-    transactions = table_select(
-        "transactions",
-        filters=filters,
-        columns="id,description,amount,category,date,type,source,created_at",
-        order_by="date",
-        ascending=False,
-        limit=500
-    )
-
-    return [TransactionResponse(**t) for t in transactions]
-
-@api_router.put("/bookkeeping/transactions/{trans_id}", response_model=TransactionResponse)
-async def update_transaction(trans_id: str, update: TransactionUpdate, user: dict = Depends(get_current_user)):
-    require_feature_access(user)
-
     if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required for manual editing")
+        raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    updated = table_update(
-        "transactions",
-        {"id": trans_id, "user_id": user["id"]},
-        update_data
-    )
-
-    if not updated:
+    existing = table_select_one("transactions", {"id": transaction_id, "user_id": user["id"]})
+    if not existing:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    trans = table_select_one(
-        "transactions",
-        {"id": trans_id, "user_id": user["id"]},
-        columns="id,description,amount,category,date,type,source,created_at"
-    )
+    update_data = {k: v for k, v in trans.dict().items() if v is not None}
+    if not update_data:
+        return TransactionResponse(**existing)
 
-    return TransactionResponse(**trans)
+    updated = table_update("transactions", {"id": transaction_id, "user_id": user["id"]}, update_data)
+    final_row = updated[0] if updated else table_select_one("transactions", {"id": transaction_id, "user_id": user["id"]})
 
-@api_router.delete("/bookkeeping/transactions/{trans_id}")
-async def delete_transaction(trans_id: str, user: dict = Depends(get_current_user)):
+    return TransactionResponse(**final_row)
+
+
+@api_router.delete("/bookkeeping/transactions/{transaction_id}")
+async def delete_transaction(transaction_id: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    deleted = table_delete("transactions", {"id": trans_id, "user_id": user["id"]})
+    deleted = table_delete("transactions", {"id": transaction_id, "user_id": user["id"]})
     if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
     return {"message": "Transaction deleted"}
 
+
 @api_router.get("/bookkeeping/insights")
-async def get_financial_insights(user: dict = Depends(get_current_user)):
+async def get_bookkeeping_insights(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
     if not check_plan_access(user, "premium"):
@@ -1045,122 +1028,131 @@ async def get_financial_insights(user: dict = Depends(get_current_user)):
 
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
 
-    total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
-    total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
+    total_income = sum(float(t.get("amount", 0)) for t in transactions if t.get("type") == "income")
+    total_expenses = sum(abs(float(t.get("amount", 0))) for t in transactions if t.get("type") == "expense")
+    net_profit = total_income - total_expenses
+    mrr = round(total_income / 12, 2) if total_income > 0 else 0
+    burn_rate = round(total_expenses / 12, 2) if total_expenses > 0 else 0
+    runway_months = round((total_income / burn_rate), 1) if burn_rate > 0 else 0
+    profit_margin = round((net_profit / total_income) * 100, 1) if total_income > 0 else 0
 
-    metrics = {
-        "mrr": round(total_income / 12, 2) if total_income else 0,
-        "burn_rate": round(total_expenses / max(1, len(set(t["date"][:7] for t in transactions if t.get("date")))), 2) if transactions else 0,
-        "runway_months": round(total_income / max(total_expenses, 1) * 12, 1) if total_expenses else 999,
-        "cac": round(sum(abs(t["amount"]) for t in transactions if t.get("category") == "marketing") / max(1, len(transactions) // 10), 2),
-        "profit_margin": round((total_income - total_expenses) / max(total_income, 1) * 100, 2),
-        "total_income": total_income,
-        "total_expenses": total_expenses,
-        "net_profit": total_income - total_expenses
+    insights_payload = {
+        "total_income": round(total_income, 2),
+        "total_expenses": round(total_expenses, 2),
+        "net_profit": round(net_profit, 2),
+        "mrr": round(mrr, 2),
+        "burn_rate": round(burn_rate, 2),
+        "runway_months": runway_months,
+        "profit_margin": profit_margin,
     }
 
-    ai_insights = await generate_financial_insights(transactions, metrics)
+    try:
+        ai_result = await generate_financial_insights(transactions)
+        insights_payload["ai_analysis"] = ai_result if isinstance(ai_result, str) else ai_result.get("analysis")
+    except Exception as e:
+        logger.error(f"FINANCIAL INSIGHTS ERROR: {e}")
+        insights_payload["ai_analysis"] = "AI financial analysis is temporarily unavailable."
 
-    return {
-        **metrics,
-        "ai_analysis": ai_insights.get("ai_analysis"),
-        "generated_by": ai_insights.get("generated_by", "mock")
-    }
+    return insights_payload
 
-# ==================== REPORTS ROUTES (ENTERPRISE) ====================
+
+# ==================== REPORT ROUTES (ENTERPRISE) ====================
 
 @api_router.get("/reports/profit-loss", response_model=FinancialReportResponse)
-async def get_profit_loss(period: str = "monthly", user: dict = Depends(get_current_user)):
+async def profit_loss_report(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
+    revenue = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
 
-    income = sum(t["amount"] for t in transactions if t["type"] == "income")
     expenses_by_category = {}
+    total_expenses = 0.0
+
     for t in transactions:
-        if t["type"] == "expense":
-            cat = t["category"]
-            expenses_by_category[cat] = expenses_by_category.get(cat, 0) + abs(t["amount"])
+        if t.get("type") == "expense":
+            amount = abs(float(t["amount"]))
+            total_expenses += amount
+            category = t.get("category", "other")
+            expenses_by_category[category] = expenses_by_category.get(category, 0) + amount
+
+    net_income = revenue - total_expenses
 
     return FinancialReportResponse(
-        report_type="profit_loss",
-        period=period,
+        report_type="profit-loss",
+        period="all-time",
         data={
-            "revenue": income,
-            "expenses": expenses_by_category,
-            "total_expenses": sum(expenses_by_category.values()),
-            "gross_profit": income - sum(expenses_by_category.values()),
-            "net_income": income - sum(expenses_by_category.values())
+            "revenue": round(revenue, 2),
+            "expenses": {k: round(v, 2) for k, v in expenses_by_category.items()},
+            "total_expenses": round(total_expenses, 2),
+            "net_income": round(net_income, 2),
         },
         generated_at=now_iso()
     )
 
+
 @api_router.get("/reports/balance-sheet", response_model=FinancialReportResponse)
-async def get_balance_sheet(user: dict = Depends(get_current_user)):
+async def balance_sheet_report(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
+    income_total = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
+    expense_total = sum(abs(float(t["amount"])) for t in transactions if t.get("type") == "expense")
+    cash = income_total - expense_total
+    tax_payable = max(cash * 0.15, 0)
 
-    total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
-    total_expenses = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
+    total_assets = cash
+    total_liabilities = tax_payable
+    equity = total_assets - total_liabilities
 
     return FinancialReportResponse(
-        report_type="balance_sheet",
-        period="current",
+        report_type="balance-sheet",
+        period="all-time",
         data={
             "assets": {
-                "cash": total_income - total_expenses,
+                "cash": round(cash, 2),
                 "accounts_receivable": 0,
-                "total_assets": total_income - total_expenses
             },
             "liabilities": {
                 "accounts_payable": 0,
-                "total_liabilities": 0
+                "tax_payable": round(tax_payable, 2),
             },
-            "equity": {
-                "retained_earnings": total_income - total_expenses,
-                "total_equity": total_income - total_expenses
-            }
+            "total_assets": round(total_assets, 2),
+            "total_liabilities": round(total_liabilities, 2),
+            "equity": round(equity, 2),
         },
         generated_at=now_iso()
     )
 
+
 @api_router.get("/reports/cash-flow", response_model=FinancialReportResponse)
-async def get_cash_flow(user: dict = Depends(get_current_user)):
+async def cash_flow_report(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
-
-    monthly_data = {}
-    for t in transactions:
-        month = t["date"][:7]
-        if month not in monthly_data:
-            monthly_data[month] = {"inflow": 0, "outflow": 0}
-        if t["type"] == "income":
-            monthly_data[month]["inflow"] += t["amount"]
-        else:
-            monthly_data[month]["outflow"] += abs(t["amount"])
+    cash_in = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
+    cash_out = sum(abs(float(t["amount"])) for t in transactions if t.get("type") == "expense")
+    net_cash_flow = cash_in - cash_out
 
     return FinancialReportResponse(
-        report_type="cash_flow",
-        period="monthly",
+        report_type="cash-flow",
+        period="all-time",
         data={
-            "monthly_breakdown": monthly_data,
-            "total_inflow": sum(m["inflow"] for m in monthly_data.values()),
-            "total_outflow": sum(m["outflow"] for m in monthly_data.values()),
-            "net_cash_flow": sum(m["inflow"] - m["outflow"] for m in monthly_data.values())
+            "cash_in": round(cash_in, 2),
+            "cash_out": round(cash_out, 2),
+            "net_cash_flow": round(net_cash_flow, 2),
         },
         generated_at=now_iso()
     )
+
 
 @api_router.get("/reports/export/{report_type}")
 async def export_report(report_type: str, format: str = "csv", user: dict = Depends(get_current_user)):
@@ -1169,10 +1161,14 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    return {
-        "message": f"Export initiated for {report_type} in {format} format",
-        "download_url": f"/api/reports/download/{report_type}.{format}"
-    }
+    if report_type not in ["profit-loss", "balance-sheet", "cash-flow"]:
+        raise HTTPException(status_code=400, detail="Invalid report type")
+
+    if format not in ["csv", "pdf"]:
+        raise HTTPException(status_code=400, detail="Invalid export format")
+
+    return {"message": f"{report_type} report export prepared in {format.upper()} format"}
+
 
 # ==================== INTEGRATIONS ROUTES (ENTERPRISE) ====================
 
@@ -1183,65 +1179,50 @@ async def get_integrations(user: dict = Depends(get_current_user)):
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    integrations = table_select(
+    rows = table_select(
         "integrations",
         {"user_id": user["id"]},
         columns="id,platform,status,connected_at",
+        order_by="connected_at",
+        ascending=False,
         limit=20
     )
 
-    available = [
-        {"id": "shopify", "platform": "shopify", "status": "disconnected", "connected_at": None},
-        {"id": "stripe", "platform": "stripe", "status": "disconnected", "connected_at": None},
-        {"id": "paypal", "platform": "paypal", "status": "disconnected", "connected_at": None},
-        {"id": "whop", "platform": "whop", "status": "disconnected", "connected_at": None}
-    ]
+    return [IntegrationResponse(**row) for row in rows]
 
-    connected_platforms = {i["platform"] for i in integrations}
-    result = []
-    for a in available:
-        if a["platform"] in connected_platforms:
-            connected = next(i for i in integrations if i["platform"] == a["platform"])
-            result.append(IntegrationResponse(**connected))
-        else:
-            result.append(IntegrationResponse(**a))
 
-    return result
-
-@api_router.post("/integrations/connect", response_model=IntegrationResponse)
-async def connect_integration(integration: IntegrationConnect, user: dict = Depends(get_current_user)):
+@api_router.post("/integrations/connect")
+async def connect_integration(payload: IntegrationConnect, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    valid_platforms = ["shopify", "stripe", "paypal", "whop"]
-    if integration.platform not in valid_platforms:
-        raise HTTPException(status_code=400, detail="Invalid platform")
-
-    existing = table_select_one("integrations", {"user_id": user["id"], "platform": integration.platform})
-
-    int_doc = {
-        "id": existing["id"] if existing else str(uuid.uuid4()),
-        "user_id": user["id"],
-        "platform": integration.platform,
-        "api_key": integration.api_key,
-        "api_secret": integration.api_secret,
-        "status": "connected",
-        "connected_at": now_iso()
-    }
+    existing = table_select_one("integrations", {"user_id": user["id"], "platform": payload.platform})
 
     if existing:
-        table_update("integrations", {"id": existing["id"]}, int_doc)
+        table_update(
+            "integrations",
+            {"id": existing["id"]},
+            {
+                "status": "connected",
+                "connected_at": now_iso(),
+            }
+        )
     else:
-        table_insert_one("integrations", int_doc)
+        table_insert_one(
+            "integrations",
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "platform": payload.platform,
+                "status": "connected",
+                "connected_at": now_iso(),
+            }
+        )
 
-    return IntegrationResponse(
-        id=int_doc["id"],
-        platform=integration.platform,
-        status="connected",
-        connected_at=int_doc["connected_at"]
-    )
+    return {"message": f"{payload.platform} connected successfully"}
+
 
 @api_router.delete("/integrations/{platform}")
 async def disconnect_integration(platform: str, user: dict = Depends(get_current_user)):
@@ -1253,7 +1234,9 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
     deleted = table_delete("integrations", {"user_id": user["id"], "platform": platform})
     if not deleted:
         raise HTTPException(status_code=404, detail="Integration not found")
+
     return {"message": f"{platform} disconnected"}
+
 
 @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
@@ -1272,17 +1255,28 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
             "user_id": user["id"],
             "description": f"{platform.title()} - Order #12345",
             "amount": 99.99,
-            "category": "fees" if "fee" in platform else "other",
+            "category": "other",
             "date": now_iso()[:10],
             "type": "income",
+            "source": platform,
+            "created_at": now_iso()
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "description": f"{platform.title()} - Platform Fee",
+            "amount": -9.99,
+            "category": "fees",
+            "date": now_iso()[:10],
+            "type": "expense",
             "source": platform,
             "created_at": now_iso()
         }
     ]
 
     table_insert_many("transactions", mock_transactions)
-
     return {"message": f"Synced {len(mock_transactions)} transactions from {platform}"}
+
 
 # ==================== TAX INSIGHTS ROUTES (ENTERPRISE) ====================
 
@@ -1296,10 +1290,11 @@ async def analyze_tax_documents(
     if not check_plan_access(user, "enterprise"):
         raise HTTPException(status_code=403, detail="Enterprise plan required")
 
-    insight_id = str(uuid.uuid4())
+    await file.read()
 
+    insight_id = str(uuid.uuid4())
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
-    total_expenses = sum(abs(t["amount"]) for t in transactions if t.get("type") == "expense")
+    total_expenses = sum(abs(float(t["amount"])) for t in transactions if t.get("type") == "expense")
 
     ai_tax_insights = await generate_tax_insights(transactions, total_expenses)
 
@@ -1316,8 +1311,8 @@ async def analyze_tax_documents(
     }
 
     table_insert_one("tax_insights", insight)
-
     return TaxInsightResponse(**{k: v for k, v in insight.items() if k != "user_id"})
+
 
 @api_router.get("/tax/insights", response_model=List[TaxInsightResponse])
 async def get_tax_insights(user: dict = Depends(get_current_user)):
