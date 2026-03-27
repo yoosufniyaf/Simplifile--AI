@@ -13,14 +13,14 @@ import {
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { 
-  Link2, 
+import {
+  Link2,
   Lock,
   Loader2,
   Check,
   X,
   RefreshCw,
-  ExternalLink
+  Zap,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -32,31 +32,37 @@ const PLATFORM_INFO = {
     name: "Shopify",
     description: "Import orders, revenue, refunds, and fees",
     icon: "🛍️",
-    color: "bg-green-500/20 text-green-400 border-green-500/30"
+    color: "bg-green-500/20 text-green-400 border-green-500/30",
   },
   stripe: {
     name: "Stripe",
     description: "Sync payments, subscriptions, and payouts",
     icon: "💳",
-    color: "bg-purple-500/20 text-purple-400 border-purple-500/30"
+    color: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   },
   paypal: {
     name: "PayPal",
     description: "Import transactions and fees",
     icon: "🅿️",
-    color: "bg-blue-500/20 text-blue-400 border-blue-500/30"
+    color: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   },
   whop: {
     name: "Whop",
     description: "Connect your Whop store for revenue tracking",
     icon: "⚡",
-    color: "bg-amber-500/20 text-amber-400 border-amber-500/30"
-  }
+    color: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+  },
 };
+
+const DEFAULT_PLATFORMS = Object.keys(PLATFORM_INFO).map((platform) => ({
+  platform,
+  status: "not_connected",
+  connected_at: null,
+}));
 
 const IntegrationsPage = () => {
   const { token, checkPlanAccess } = useAuth();
-  const [integrations, setIntegrations] = useState([]);
+  const [integrations, setIntegrations] = useState(DEFAULT_PLATFORMS);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(null);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
@@ -71,13 +77,26 @@ const IntegrationsPage = () => {
       setLoading(false);
       return;
     }
+
     try {
       const response = await axios.get(`${API}/integrations`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setIntegrations(response.data);
+
+      const byPlatform = new Map(
+        (Array.isArray(response.data) ? response.data : []).map((item) => [item.platform, item])
+      );
+
+      setIntegrations(
+        Object.keys(PLATFORM_INFO).map((platform) => ({
+          platform,
+          status: byPlatform.get(platform)?.status || "not_connected",
+          connected_at: byPlatform.get(platform)?.connected_at || null,
+        }))
+      );
     } catch (error) {
       console.error("Failed to fetch integrations:", error);
+      setIntegrations(DEFAULT_PLATFORMS);
     } finally {
       setLoading(false);
     }
@@ -88,49 +107,56 @@ const IntegrationsPage = () => {
   }, [fetchIntegrations]);
 
   const handleConnect = async () => {
+    if (!selectedPlatform) return;
+
     try {
       await axios.post(
         `${API}/integrations/connect`,
         {
           platform: selectedPlatform,
           api_key: apiKey,
-          api_secret: apiSecret
+          api_secret: apiSecret,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       toast.success(`${PLATFORM_INFO[selectedPlatform].name} connected successfully`);
       setConnectDialogOpen(false);
       setApiKey("");
       setApiSecret("");
-      fetchIntegrations();
+      setSelectedPlatform(null);
+      await fetchIntegrations();
     } catch (error) {
-      toast.error("Failed to connect integration");
+      toast.error(error?.response?.data?.detail || "Failed to connect integration");
     }
   };
 
   const handleDisconnect = async (platform) => {
     try {
       await axios.delete(`${API}/integrations/${platform}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
+
       toast.success(`${PLATFORM_INFO[platform].name} disconnected`);
-      fetchIntegrations();
+      await fetchIntegrations();
     } catch (error) {
-      toast.error("Failed to disconnect integration");
+      toast.error(error?.response?.data?.detail || "Failed to disconnect integration");
     }
   };
 
   const handleSync = async (platform) => {
     setSyncing(platform);
+
     try {
       const response = await axios.post(
         `${API}/integrations/${platform}/sync`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      toast.success(response.data.message);
+
+      toast.success(response.data.message || "Sync complete");
     } catch (error) {
-      toast.error("Sync failed");
+      toast.error(error?.response?.data?.detail || "Sync failed");
     } finally {
       setSyncing(null);
     }
@@ -138,6 +164,8 @@ const IntegrationsPage = () => {
 
   const openConnectDialog = (platform) => {
     setSelectedPlatform(platform);
+    setApiKey("");
+    setApiSecret("");
     setConnectDialogOpen(true);
   };
 
@@ -147,13 +175,14 @@ const IntegrationsPage = () => {
         <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
           <Lock className="h-8 w-8 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+        <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
           Enterprise Feature
         </h2>
         <p className="text-muted-foreground mb-6 max-w-md">
-          Upgrade to Enterprise to connect Shopify, Stripe, PayPal, and Whop for automatic transaction imports.
+          Upgrade to Enterprise to connect Shopify, Stripe, PayPal, and Whop for automatic
+          transaction imports.
         </p>
-        <Button className="glow-button" onClick={() => window.location.href = "/dashboard/settings"}>
+        <Button className="glow-button" onClick={() => (window.location.href = "/dashboard/settings")}>
           Upgrade to Enterprise
         </Button>
       </div>
@@ -168,11 +197,12 @@ const IntegrationsPage = () => {
     );
   }
 
+  const connectedCount = integrations.filter((i) => i.status === "connected").length;
+
   return (
     <div className="space-y-6" data-testid="integrations-page">
-      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
+        <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "Outfit, sans-serif" }}>
           Integrations
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -180,7 +210,6 @@ const IntegrationsPage = () => {
         </p>
       </div>
 
-      {/* Connected Count */}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
@@ -189,8 +218,8 @@ const IntegrationsPage = () => {
                 <Link2 className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-lg font-semibold" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                  {integrations.filter(i => i.status === "connected").length} of 4 Connected
+                <p className="text-lg font-semibold" style={{ fontFamily: "Outfit, sans-serif" }}>
+                  {connectedCount} of 4 Connected
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Connect all platforms for complete financial visibility
@@ -201,7 +230,6 @@ const IntegrationsPage = () => {
         </CardContent>
       </Card>
 
-      {/* Integration Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {integrations.map((integration) => {
           const info = PLATFORM_INFO[integration.platform];
@@ -210,18 +238,19 @@ const IntegrationsPage = () => {
           return (
             <Card key={integration.platform} className="card-hover" data-testid={`integration-${integration.platform}`}>
               <CardHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-4">
                     <div className={`h-12 w-12 rounded-xl flex items-center justify-center text-2xl ${info.color}`}>
                       {info.icon}
                     </div>
                     <div>
-                      <CardTitle className="text-lg" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                      <CardTitle className="text-lg" style={{ fontFamily: "Outfit, sans-serif" }}>
                         {info.name}
                       </CardTitle>
                       <CardDescription>{info.description}</CardDescription>
                     </div>
                   </div>
+
                   <Badge variant={isConnected ? "default" : "secondary"}>
                     {isConnected ? (
                       <span className="flex items-center gap-1">
@@ -234,12 +263,17 @@ const IntegrationsPage = () => {
                   </Badge>
                 </div>
               </CardHeader>
+
               <CardContent>
                 {isConnected ? (
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Connected on {new Date(integration.connected_at).toLocaleDateString()}
+                      Connected on{" "}
+                      {integration.connected_at
+                        ? new Date(integration.connected_at).toLocaleDateString()
+                        : "Unknown"}
                     </p>
+
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -255,6 +289,7 @@ const IntegrationsPage = () => {
                         )}
                         Sync Now
                       </Button>
+
                       <Button
                         variant="ghost"
                         size="sm"
@@ -267,14 +302,20 @@ const IntegrationsPage = () => {
                     </div>
                   </div>
                 ) : (
-                  <Button
-                    className="w-full"
-                    onClick={() => openConnectDialog(integration.platform)}
-                    data-testid={`connect-${integration.platform}`}
-                  >
-                    Connect {info.name}
-                    <ExternalLink className="ml-2 h-4 w-4" />
-                  </Button>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Connect {info.name} to import transactions automatically.
+                    </p>
+
+                    <Button
+                      className="glow-button"
+                      size="sm"
+                      onClick={() => openConnectDialog(integration.platform)}
+                      data-testid={`connect-${integration.platform}`}
+                    >
+                      Connect {info.name}
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -282,46 +323,44 @@ const IntegrationsPage = () => {
         })}
       </div>
 
-      {/* Connect Dialog */}
       <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle style={{ fontFamily: 'Outfit, sans-serif' }}>
-              Connect {selectedPlatform && PLATFORM_INFO[selectedPlatform]?.name}
+            <DialogTitle style={{ fontFamily: "Outfit, sans-serif" }}>
+              Connect {selectedPlatform ? PLATFORM_INFO[selectedPlatform].name : "Platform"}
             </DialogTitle>
             <DialogDescription>
-              Enter your API credentials to connect. You can find these in your {selectedPlatform} dashboard.
+              For now, you can enter placeholder credentials. Your current backend supports demo
+              connection flow first.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+
+          <div className="space-y-4">
+            <div>
               <Label>API Key</Label>
               <Input
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="Enter API key"
-                data-testid="api-key-input"
               />
             </div>
-            <div className="space-y-2">
-              <Label>API Secret (optional)</Label>
+
+            <div>
+              <Label>API Secret</Label>
               <Input
-                type="password"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
                 placeholder="Enter API secret"
-                data-testid="api-secret-input"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Your credentials are encrypted and stored securely. We never share your data with third parties.
-            </p>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setConnectDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleConnect} disabled={!apiKey} data-testid="connect-submit-btn">
+            <Button onClick={handleConnect}>
+              <Zap className="mr-2 h-4 w-4" />
               Connect
             </Button>
           </DialogFooter>
