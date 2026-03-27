@@ -91,6 +91,12 @@ class PlanUpdate(BaseModel):
     plan: str
     billing_cycle: str = "monthly"
 
+class ActivateSubscriptionRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    plan: Optional[str] = None
+    billing: Optional[str] = "monthly"
+    payment_id: Optional[str] = None
+
 class DocumentResponse(BaseModel):
     id: str
     name: str
@@ -261,6 +267,11 @@ def now_iso() -> str:
 def normalize_list(value):
     return value if isinstance(value, list) else []
 
+def normalize_email(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return str(value).strip().lower()
+
 def infer_plan_from_text(*values) -> Optional[str]:
     combined = " ".join(str(v).lower() for v in values if v)
     if "enterprise" in combined:
@@ -270,6 +281,12 @@ def infer_plan_from_text(*values) -> Optional[str]:
     if "basic" in combined:
         return "basic"
     return None
+
+def infer_billing_from_text(*values) -> str:
+    combined = " ".join(str(v).lower() for v in values if v)
+    if "annual" in combined or "yearly" in combined or "year" in combined:
+        return "annual"
+    return "monthly"
 
 async def normalize_user_access(user: dict) -> dict:
     updated_fields = {}
@@ -350,14 +367,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    existing = table_select_one("users", {"email": user_data.email})
+    email = normalize_email(user_data.email)
+    existing = table_select_one("users", {"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user_id = str(uuid.uuid4())
     user_doc = {
         "id": user_id,
-        "email": user_data.email,
+        "email": email,
         "name": user_data.name,
         "password_hash": hash_password(user_data.password),
         "plan": "basic",
@@ -378,7 +396,8 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = table_select_one("users", {"email": credentials.email})
+    email = normalize_email(credentials.email)
+    user = table_select_one("users", {"email": email})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -399,7 +418,8 @@ async def forgot_password(payload: ForgotPasswordRequest):
 
     resend.api_key = os.environ.get("RESEND_API_KEY")
 
-    user = table_select_one("users", {"email": payload.email})
+    email = normalize_email(payload.email)
+    user = table_select_one("users", {"email": email})
 
     success_message = {
         "message": "If an account exists, a reset link has been sent."
@@ -428,7 +448,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
     try:
         resend.Emails.send({
             "from": "onboarding@resend.dev",
-            "to": [payload.email],
+            "to": [email],
             "subject": "Reset your password",
             "html": f"""
                 <h2>Reset your password</h2>
@@ -558,6 +578,37 @@ async def update_subscription(plan_data: PlanUpdate, user: dict = Depends(get_cu
 
     return {"message": "Subscription updated", "plan": plan_data.plan}
 
+@api_router.post("/subscription/activate")
+async def activate_subscription(payload: ActivateSubscriptionRequest, user: dict = Depends(get_current_user)):
+    requested_email = normalize_email(payload.email)
+    current_email = normalize_email(user.get("email"))
+
+    if requested_email and requested_email != current_email:
+        raise HTTPException(status_code=403, detail="Email does not match logged-in user")
+
+    plan = infer_plan_from_text(payload.plan) or user.get("plan", "basic")
+    billing_cycle = infer_billing_from_text(payload.billing)
+
+    updated = table_update(
+        "users",
+        {"id": user["id"]},
+        {
+            "plan": plan,
+            "billing_cycle": billing_cycle,
+            "subscription_status": "active",
+            "trial_started": True,
+            "trial_ends_at": None,
+            "last_payment_id": payload.payment_id or user.get("last_payment_id")
+        }
+    )
+
+    final_user = updated[0] if updated else table_select_one("users", {"id": user["id"]})
+
+    return {
+        "message": "Subscription activated",
+        "user": final_user
+    }
+
 @api_router.get("/subscription/plans")
 async def get_plans():
     return {
@@ -566,7 +617,8 @@ async def get_plans():
                 "id": "basic",
                 "name": "Basic Advisor",
                 "monthly_price": 9.99,
-                "annual_price": round(9.99 * 12 * 0.75, 2),
+                "annual_monthly_price": 5.99,
+                "annual_price": 71.88,
                 "features": [
                     "Document Simplifier",
                     "AI Copilot Chat",
@@ -577,8 +629,9 @@ async def get_plans():
             {
                 "id": "premium",
                 "name": "Premium",
-                "monthly_price": 29.99,
-                "annual_price": round(29.99 * 12 * 0.75, 2),
+                "monthly_price": 39.99,
+                "annual_monthly_price": 23.99,
+                "annual_price": 287.88,
                 "features": [
                     "Everything in Basic",
                     "AI Bookkeeper Assistant",
@@ -592,7 +645,8 @@ async def get_plans():
                 "id": "enterprise",
                 "name": "Enterprise",
                 "monthly_price": 49.99,
-                "annual_price": round(49.99 * 12 * 0.75, 2),
+                "annual_monthly_price": 29.99,
+                "annual_price": 359.88,
                 "features": [
                     "Everything in Premium",
                     "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
@@ -616,12 +670,15 @@ async def whop_webhook(request: Request):
     event_type = payload.get("type") or payload.get("event") or payload.get("event_type")
     data = payload.get("data") or payload.get("payload") or payload
 
-    customer_email = (
+    customer_email = normalize_email(
         data.get("customer_email")
         or data.get("email")
         or data.get("user_email")
         or data.get("buyer_email")
         or data.get("member_email")
+        or (data.get("user") or {}).get("email")
+        or (data.get("customer") or {}).get("email")
+        or (data.get("member") or {}).get("email")
     )
 
     plan_hint = (
@@ -631,13 +688,14 @@ async def whop_webhook(request: Request):
         or data.get("product_id")
         or data.get("offer_title")
         or data.get("product_name")
+        or json.dumps(data)
     )
 
-    billing_cycle = (
-        data.get("billing_cycle")
-        or data.get("interval")
-        or data.get("renewal_period")
-        or "monthly"
+    billing_cycle = infer_billing_from_text(
+        data.get("billing_cycle"),
+        data.get("interval"),
+        data.get("renewal_period"),
+        plan_hint
     )
 
     if not customer_email:
@@ -645,12 +703,23 @@ async def whop_webhook(request: Request):
 
     user = table_select_one("users", {"email": customer_email})
     if not user:
-        return {"status": "ignored", "reason": "user not found", "email": customer_email, "event_type": event_type}
+        return {
+            "status": "ignored",
+            "reason": "user not found",
+            "email": customer_email,
+            "event_type": event_type
+        }
 
     event_text = f"{event_type} {json.dumps(data)}".lower()
 
-    cancelled_keywords = ["cancel", "cancelled", "canceled", "refund", "refunded", "chargeback", "dispute", "revoked", "expired"]
-    paid_keywords = ["payment", "purchase", "checkout", "subscription", "membership", "order", "paid", "succeeded", "active", "created"]
+    cancelled_keywords = [
+        "cancel", "cancelled", "canceled", "refund", "refunded",
+        "chargeback", "dispute", "revoked", "expired"
+    ]
+    paid_keywords = [
+        "payment", "purchase", "checkout", "subscription", "membership",
+        "order", "paid", "succeeded", "active", "created", "invoice_paid"
+    ]
 
     inferred_plan = infer_plan_from_text(plan_hint, event_text) or user.get("plan", "basic")
 
@@ -671,7 +740,13 @@ async def whop_webhook(request: Request):
             "event_type": event_type
         }
 
-    if any(word in event_text for word in paid_keywords):
+    if event_type == "invoice_paid" or any(word in event_text for word in paid_keywords):
+        payment_id = (
+            data.get("payment_id")
+            or data.get("invoice_id")
+            or data.get("id")
+        )
+
         table_update(
             "users",
             {"id": user["id"]},
@@ -680,7 +755,8 @@ async def whop_webhook(request: Request):
                 "billing_cycle": billing_cycle,
                 "subscription_status": "active",
                 "trial_started": True,
-                "trial_ends_at": None
+                "trial_ends_at": None,
+                "last_payment_id": payment_id
             }
         )
         return {
@@ -688,6 +764,7 @@ async def whop_webhook(request: Request):
             "action": "activated",
             "email": customer_email,
             "plan": inferred_plan,
+            "billing_cycle": billing_cycle,
             "event_type": event_type
         }
 
