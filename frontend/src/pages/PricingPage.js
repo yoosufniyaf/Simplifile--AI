@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
@@ -84,14 +84,21 @@ const PricingPage = () => {
   const [processingSuccess, setProcessingSuccess] = useState(false);
 
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const activationAttemptedRef = useRef(false);
+
   const auth = useAuth() || {};
-  const { token } = auth;
+  const { token, loading: authLoading } = auth;
+
+  const query = useMemo(() => {
+    return new URLSearchParams(location.search);
+  }, [location.search]);
 
   useEffect(() => {
     const fetchPlans = async () => {
       try {
         const response = await axios.get(`${API}/subscription/plans`);
+
         const apiPlans = Array.isArray(response?.data?.plans)
           ? response.data.plans
               .filter((p) => p.id !== "enterprise")
@@ -149,18 +156,28 @@ const PricingPage = () => {
 
   useEffect(() => {
     const handleSuccessfulCheckout = async () => {
-      const success = searchParams.get("success");
-      const plan = searchParams.get("plan");
-      const billing = searchParams.get("billing") || "monthly";
+      const success =
+        query.get("success") === "true" ||
+        query.get("status") === "success" ||
+        query.get("checkout_status") === "success";
+
+      const plan = query.get("plan");
+      const billing = query.get("billing") || "monthly";
       const storedToken = localStorage.getItem("token") || token;
 
-      if (success !== "true" || !plan || !storedToken || processingSuccess) {
+      if (authLoading) return;
+      if (!success) return;
+      if (!plan) return;
+      if (!storedToken) {
+        toast.error("Please log in again before completing checkout.");
         return;
       }
+      if (activationAttemptedRef.current) return;
+
+      activationAttemptedRef.current = true;
+      setProcessingSuccess(true);
 
       try {
-        setProcessingSuccess(true);
-
         await axios.post(
           `${API}/subscription/update`,
           {
@@ -180,22 +197,26 @@ const PricingPage = () => {
           },
         });
 
+        localStorage.setItem("token", storedToken);
         localStorage.setItem("user", JSON.stringify(meRes.data));
 
         toast.success("Subscription activated successfully");
+
+        window.history.replaceState({}, "", "/pricing");
         navigate("/dashboard", { replace: true });
       } catch (error) {
         console.error("Failed to activate subscription:", error);
         toast.error(
           error?.response?.data?.detail || "Could not activate subscription"
         );
+        activationAttemptedRef.current = false;
       } finally {
         setProcessingSuccess(false);
       }
     };
 
     handleSuccessfulCheckout();
-  }, [searchParams, navigate, token, processingSuccess]);
+  }, [query, token, authLoading, navigate]);
 
   const getPrice = (plan) => {
     if (isAnnual) {
@@ -219,7 +240,9 @@ const PricingPage = () => {
   };
 
   const handlePlanClick = (plan) => {
-    if (!token) {
+    const storedToken = localStorage.getItem("token") || token;
+
+    if (!storedToken) {
       navigate("/register");
       return;
     }
@@ -307,7 +330,7 @@ const PricingPage = () => {
 
               <ul className="space-y-3 mb-6 text-left">
                 {plan.features.map((feature, i) => (
-                  <li key={i} className="flex gap-2">
+                  <li key={i} className="flex gap-2" key={`${plan.id}-${i}`}>
                     <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                     <span>{feature}</span>
                   </li>
