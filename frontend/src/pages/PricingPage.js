@@ -22,12 +22,12 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 */
 const WHOP_LINKS = {
   basic: {
-    monthly: "YOUR_NEW_BASIC_MONTHLY_CHECKOUT_LINK",
-    annual: "YOUR_NEW_BASIC_ANNUAL_CHECKOUT_LINK",
+    monthly: "https://whop.com/checkout/plan_95AtzzUy28TLQ",
+    annual: "https://whop.com/checkout/plan_RWSxmii5PJhrt",
   },
   premium: {
-    monthly: "YOUR_NEW_PREMIUM_MONTHLY_CHECKOUT_LINK",
-    annual: "YOUR_NEW_PREMIUM_ANNUAL_CHECKOUT_LINK",
+    monthly: "https://whop.com/checkout/plan_cW1iWYsM39DyN",
+    annual: "https://whop.com/checkout/plan_dbWKSXNvLU8aZ",
   },
 };
 
