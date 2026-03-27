@@ -10,6 +10,27 @@ import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+/*
+  IMPORTANT:
+  Replace these 4 values with your NEW Whop checkout links.
+
+  Use:
+  - Monthly links = the ones with 3-day free trial and initial fee = 0
+  - Annual links = no trial, initial fee = 0
+  - They should look like: https://whop.com/checkout/plan_xxxxx
+  - DO NOT use product-page links like https://whop.com/simplifile-ai/...
+*/
+const WHOP_LINKS = {
+  basic: {
+    monthly: "YOUR_NEW_BASIC_MONTHLY_CHECKOUT_LINK",
+    annual: "YOUR_NEW_BASIC_ANNUAL_CHECKOUT_LINK",
+  },
+  premium: {
+    monthly: "YOUR_NEW_PREMIUM_MONTHLY_CHECKOUT_LINK",
+    annual: "YOUR_NEW_PREMIUM_ANNUAL_CHECKOUT_LINK",
+  },
+};
+
 const fallbackPlans = [
   {
     id: "basic",
@@ -17,8 +38,8 @@ const fallbackPlans = [
     monthly_price: 9.99,
     annual_monthly_price: 5.99,
     annual_price: 71.88,
-    monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
-    annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
+    monthly_checkout_url: WHOP_LINKS.basic.monthly,
+    annual_checkout_url: WHOP_LINKS.basic.annual,
     features: [
       "Document Simplifier",
       "AI Copilot Chat",
@@ -32,8 +53,8 @@ const fallbackPlans = [
     monthly_price: 39.99,
     annual_monthly_price: 23.99,
     annual_price: 287.88,
-    monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
-    annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
+    monthly_checkout_url: WHOP_LINKS.premium.monthly,
+    annual_checkout_url: WHOP_LINKS.premium.annual,
     features: [
       "Everything in Basic",
       "AI Bookkeeper Assistant",
@@ -67,7 +88,6 @@ const normalizePlan = (plan) => {
     popular: Boolean(plan?.popular ?? fallbackPlan?.popular),
     monthly_checkout_url:
       plan?.monthly_checkout_url ||
-      plan?.checkout_url ||
       fallbackPlan?.monthly_checkout_url ||
       null,
     annual_checkout_url:
@@ -83,9 +103,8 @@ const PricingPage = () => {
   const [loadingPlans, setLoadingPlans] = useState(true);
 
   const navigate = useNavigate();
-
   const auth = useAuth() || {};
-  const { token } = auth;
+  const { token, user } = auth;
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -102,8 +121,14 @@ const PricingPage = () => {
                     monthly_price: 9.99,
                     annual_monthly_price: 5.99,
                     annual_price: 71.88,
-                    monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
-                    annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
+                    monthly_checkout_url: WHOP_LINKS.basic.monthly,
+                    annual_checkout_url: WHOP_LINKS.basic.annual,
+                    features: [
+                      "Document Simplifier",
+                      "AI Copilot Chat",
+                      "Upload PDFs & Images",
+                      "Key Points & Risks Analysis",
+                    ],
                   });
                 }
 
@@ -113,8 +138,8 @@ const PricingPage = () => {
                     monthly_price: 39.99,
                     annual_monthly_price: 23.99,
                     annual_price: 287.88,
-                    monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
-                    annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
+                    monthly_checkout_url: WHOP_LINKS.premium.monthly,
+                    annual_checkout_url: WHOP_LINKS.premium.annual,
                     features: [
                       "Everything in Basic",
                       "AI Bookkeeper Assistant",
@@ -168,6 +193,10 @@ const PricingPage = () => {
     return <FileText className="h-6 w-6" />;
   };
 
+  const getCheckoutButtonText = () => {
+    return isAnnual ? "Get Annual Plan" : "Start Free Trial";
+  };
+
   const handlePlanClick = (plan) => {
     const storedToken = localStorage.getItem("token") || token;
 
@@ -187,15 +216,26 @@ const PricingPage = () => {
       return;
     }
 
+    if (
+      checkoutUrl.includes("YOUR_NEW_") ||
+      !checkoutUrl.startsWith("https://whop.com/checkout/")
+    ) {
+      toast.error(`Please paste the correct Whop checkout link for ${plan.name}`);
+      return;
+    }
+
     const billing = isAnnual ? "annual" : "monthly";
+    const planId = plan?.id || "plan";
+    const userEmail = user?.email || "";
+
     const separator = checkoutUrl.includes("?") ? "&" : "?";
     const successUrl = encodeURIComponent(
-      `${window.location.origin}/checkout/success?plan=${plan.id}&billing=${billing}&status=success`
+      `${window.location.origin}/checkout/success?success=true&plan=${planId}&billing=${billing}&email=${encodeURIComponent(
+        userEmail
+      )}`
     );
 
-    checkoutUrl = `${checkoutUrl}${separator}success_url=${successUrl}`;
-
-    window.location.href = checkoutUrl;
+    window.location.href = `${checkoutUrl}${separator}success_url=${successUrl}`;
   };
 
   const displayPlans = useMemo(
@@ -259,6 +299,10 @@ const PricingPage = () => {
                     ${getTotalPrice(plan)} billed annually
                   </p>
                 )}
+
+                {!isAnnual && (
+                  <p className="text-sm text-green-600 mb-4">Includes 3-day free trial</p>
+                )}
               </div>
 
               <ul className="space-y-3 mb-6 text-left">
@@ -271,7 +315,7 @@ const PricingPage = () => {
               </ul>
 
               <Button className="w-full" onClick={() => handlePlanClick(plan)}>
-                Start Free Trial
+                {getCheckoutButtonText()}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </motion.div>
