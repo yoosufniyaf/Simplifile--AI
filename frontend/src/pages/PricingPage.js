@@ -1,266 +1,198 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Button } from "../components/ui/button";
-import { Switch } from "../components/ui/switch";
-import { FileText, Check, ArrowRight, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
-import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Check, Loader2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const fallbackPlans = [
+const plans = [
   {
-    id: "basic",
-    name: "Basic Advisor",
-    monthly_price: 9.99,
-    annual_monthly_price: 5.99,
-    annual_price: 71.88,
-    monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
-    annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
+    name: "Basic",
+    description: "For solo founders getting started",
+    monthlyPrice: "$9/mo",
+    annualPrice: "$90/yr",
     features: [
-      "Document Simplifier",
-      "AI Copilot Chat",
-      "Upload PDFs & Images",
-      "Key Points & Risks Analysis",
+      "Document analysis",
+      "AI chat",
+      "Basic dashboard",
     ],
   },
   {
-    id: "premium",
     name: "Premium",
-    monthly_price: 39.99,
-    annual_monthly_price: 23.99,
-    annual_price: 287.88,
-    monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
-    annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
+    description: "For growing businesses",
+    monthlyPrice: "$29/mo",
+    annualPrice: "$290/yr",
     features: [
       "Everything in Basic",
-      "AI Bookkeeper Assistant",
-      "Transaction Categorization",
-      "P&L, Monthly Summary",
-      "MRR, Burn Rate, CAC Insights",
-      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
-      "Financial Statements Auto-Generated",
-      "Manual Editing & Custom Entries",
-      "PDF & CSV Export",
-      "AI Tax Insights & Planning",
+      "Bookkeeping",
+      "AI financial insights",
     ],
-    popular: true,
+  },
+  {
+    name: "Enterprise",
+    description: "For full finance automation",
+    monthlyPrice: "$79/mo",
+    annualPrice: "$790/yr",
+    features: [
+      "Everything in Premium",
+      "Reports",
+      "Integrations",
+      "Tax insights",
+    ],
   },
 ];
 
-const normalizePlan = (plan) => {
-  const fallbackPlan = fallbackPlans.find((p) => p.id === plan?.id);
-
-  return {
-    id: plan?.id || fallbackPlan?.id || "plan",
-    name: plan?.name || fallbackPlan?.name || "Plan",
-    monthly_price: Number(plan?.monthly_price ?? fallbackPlan?.monthly_price ?? 0),
-    annual_monthly_price: Number(
-      plan?.annual_monthly_price ?? fallbackPlan?.annual_monthly_price ?? 0
-    ),
-    annual_price: Number(plan?.annual_price ?? fallbackPlan?.annual_price ?? 0),
-    features: Array.isArray(plan?.features)
-      ? plan.features
-      : fallbackPlan?.features || [],
-    popular: Boolean(plan?.popular ?? fallbackPlan?.popular),
-    monthly_checkout_url:
-      plan?.monthly_checkout_url ||
-      plan?.checkout_url ||
-      fallbackPlan?.monthly_checkout_url ||
-      null,
-    annual_checkout_url:
-      plan?.annual_checkout_url ||
-      fallbackPlan?.annual_checkout_url ||
-      null,
-  };
-};
-
-const PricingPage = () => {
-  const [isAnnual, setIsAnnual] = useState(false);
-  const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
-  const [loadingPlans, setLoadingPlans] = useState(true);
-
+export default function PricingPage() {
+  const [billingMode, setBillingMode] = useState("monthly");
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const auth = useAuth() || {};
-  const { token } = auth;
+  const [processingSuccess, setProcessingSuccess] = useState(false);
 
   useEffect(() => {
-    const fetchPlans = async () => {
+    const handleSuccessfulCheckout = async () => {
+      const success = searchParams.get("success");
+      const plan = searchParams.get("plan");
+      const billing = searchParams.get("billing") || "monthly";
+      const token = localStorage.getItem("token");
+
+      if (success !== "true" || !plan || !token || processingSuccess) {
+        return;
+      }
+
       try {
-        const response = await axios.get(`${API}/subscription/plans`);
-        const apiPlans = Array.isArray(response?.data?.plans)
-          ? response.data.plans
-              .filter((p) => p.id !== "enterprise")
-              .map((plan) => {
-                if (plan.id === "basic") {
-                  return normalizePlan({
-                    ...plan,
-                    monthly_price: 9.99,
-                    annual_monthly_price: 5.99,
-                    annual_price: 71.88,
-                  });
-                }
+        setProcessingSuccess(true);
 
-                if (plan.id === "premium") {
-                  return normalizePlan({
-                    ...plan,
-                    monthly_price: 39.99,
-                    annual_monthly_price: 23.99,
-                    annual_price: 287.88,
-                    features: [
-                      "Everything in Basic",
-                      "AI Bookkeeper Assistant",
-                      "Transaction Categorization",
-                      "P&L, Monthly Summary",
-                      "MRR, Burn Rate, CAC Insights",
-                      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
-                      "Financial Statements Auto-Generated",
-                      "Manual Editing & Custom Entries",
-                      "PDF & CSV Export",
-                      "AI Tax Insights & Planning",
-                    ],
-                    popular: true,
-                  });
-                }
+        await axios.post(
+          `${API}/subscription/update`,
+          {
+            plan,
+            billing_cycle: billing,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-                return normalizePlan(plan);
-              })
-          : [];
+        const meRes = await axios.get(`${API}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-        setPlans(apiPlans.length > 0 ? apiPlans : fallbackPlans.map(normalizePlan));
+        localStorage.setItem("user", JSON.stringify(meRes.data));
+
+        toast.success("Subscription activated successfully");
+        navigate("/dashboard", { replace: true });
       } catch (error) {
-        console.error("Failed to fetch plans:", error);
-        setPlans(fallbackPlans.map(normalizePlan));
+        console.error("Failed to activate subscription:", error);
+        toast.error(
+          error?.response?.data?.detail || "Could not activate subscription"
+        );
       } finally {
-        setLoadingPlans(false);
+        setProcessingSuccess(false);
       }
     };
 
-    fetchPlans();
-  }, []);
+    handleSuccessfulCheckout();
+  }, [searchParams, navigate, processingSuccess]);
 
-  const getPrice = (plan) => {
-    if (isAnnual) {
-      return Number(plan.annual_monthly_price || 0).toFixed(2);
-    }
-    return Number(plan.monthly_price || 0).toFixed(2);
+  const getCheckoutLink = (planName) => {
+    const plan = planName.toLowerCase();
+
+    const checkoutLinks = {
+      basic: {
+        monthly: "PASTE_BASIC_MONTHLY_WHOP_LINK_HERE",
+        annual: "PASTE_BASIC_ANNUAL_WHOP_LINK_HERE",
+      },
+      premium: {
+        monthly: "PASTE_PREMIUM_MONTHLY_WHOP_LINK_HERE",
+        annual: "PASTE_PREMIUM_ANNUAL_WHOP_LINK_HERE",
+      },
+      enterprise: {
+        monthly: "PASTE_ENTERPRISE_MONTHLY_WHOP_LINK_HERE",
+        annual: "PASTE_ENTERPRISE_ANNUAL_WHOP_LINK_HERE",
+      },
+    };
+
+    return checkoutLinks[plan]?.[billingMode] || "#";
   };
-
-  const getTotalPrice = (plan) => {
-    if (isAnnual) {
-      return Number(plan.annual_price || 0).toFixed(2);
-    }
-    return (Number(plan.monthly_price || 0) * 12).toFixed(2);
-  };
-
-  const getPlanIcon = (planId) => {
-    if (planId === "premium") {
-      return <Zap className="h-6 w-6" />;
-    }
-    return <FileText className="h-6 w-6" />;
-  };
-
-  const handlePlanClick = (plan) => {
-    if (!token) {
-      navigate("/register");
-      return;
-    }
-
-    const fallbackPlan = fallbackPlans.find((p) => p.id === plan.id);
-
-    const checkoutUrl = isAnnual
-      ? plan?.annual_checkout_url || fallbackPlan?.annual_checkout_url
-      : plan?.monthly_checkout_url || fallbackPlan?.monthly_checkout_url;
-
-    if (!checkoutUrl) {
-      toast.error(`Checkout link is missing for ${plan.name}`);
-      return;
-    }
-
-    window.location.href = checkoutUrl;
-  };
-
-  const displayPlans = loadingPlans ? fallbackPlans.map(normalizePlan) : plans;
 
   return (
-    <div className="min-h-screen bg-background">
-      <section className="py-20 md:py-28 text-center">
-        <h1 className="text-5xl font-bold mb-6">Simple, transparent pricing</h1>
-
-        <div className="flex items-center justify-center gap-4 mb-12">
-          <span className={!isAnnual ? "font-medium" : "text-muted-foreground"}>
-            Monthly
-          </span>
-
-          <Switch checked={isAnnual} onCheckedChange={setIsAnnual} />
-
-          <span className={isAnnual ? "font-medium" : "text-muted-foreground"}>
-            Annual
-          </span>
-
-          {isAnnual && (
-            <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-sm">
-              Save 40%
-            </span>
-          )}
+    <div className="min-h-screen bg-background px-6 py-16">
+      <div className="mx-auto max-w-6xl">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold tracking-tight">Choose your plan</h1>
+          <p className="text-muted-foreground mt-3">
+            Pick the plan that fits your business best
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {displayPlans.map((plan) => (
-            <motion.div
-              key={plan.id}
-              className={`p-8 rounded-3xl border ${
-                plan.popular ? "border-primary" : "border-border"
-              }`}
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex rounded-xl border border-border p-1 bg-muted/30">
+            <Button
+              variant={billingMode === "monthly" ? "default" : "ghost"}
+              onClick={() => setBillingMode("monthly")}
             >
-              {plan.popular && (
-                <span className="mb-4 inline-block bg-primary text-white px-4 py-1 rounded-full text-sm">
-                  Most Popular
-                </span>
-              )}
+              Monthly
+            </Button>
+            <Button
+              variant={billingMode === "annual" ? "default" : "ghost"}
+              onClick={() => setBillingMode("annual")}
+            >
+              Annual
+            </Button>
+          </div>
+        </div>
 
-              <div className="mb-6">
-                <div className="flex justify-center mb-4">
-                  <div className={plan.popular ? "text-primary" : "text-primary/80"}>
-                    {getPlanIcon(plan.id)}
-                  </div>
+        {processingSuccess && (
+          <div className="mb-8 flex items-center justify-center gap-2 text-sm text-primary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Activating your subscription...
+          </div>
+        )}
+
+        <div className="grid gap-6 md:grid-cols-3">
+          {plans.map((plan) => (
+            <Card key={plan.name} className="h-full">
+              <CardHeader>
+                <CardTitle>{plan.name}</CardTitle>
+                <CardDescription>{plan.description}</CardDescription>
+                <div className="pt-2 text-3xl font-bold">
+                  {billingMode === "monthly" ? plan.monthlyPrice : plan.annualPrice}
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  {plan.features.map((feature) => (
+                    <div key={feature} className="flex items-center gap-2 text-sm">
+                      <Check className="h-4 w-4 text-primary" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-2">{plan.name}</h3>
-
-                <p className="text-4xl font-bold mb-2">
-                  ${getPrice(plan)}
-                  <span className="text-sm text-muted-foreground"> /month</span>
-                </p>
-
-                {isAnnual && (
-                  <p className="text-sm text-muted-foreground mb-4">
-                    ${getTotalPrice(plan)} billed annually
-                  </p>
-                )}
-              </div>
-
-              <ul className="space-y-3 mb-6 text-left">
-                {plan.features.map((feature, i) => (
-                  <li key={i} className="flex gap-2">
-                    <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button className="w-full" onClick={() => handlePlanClick(plan)}>
-                Start Free Trial
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </motion.div>
+                <a href={getCheckoutLink(plan.name)}>
+                  <Button className="w-full">
+                    Get {plan.name}
+                  </Button>
+                </a>
+              </CardContent>
+            </Card>
           ))}
         </div>
-      </section>
+
+        <div className="mt-8 text-center">
+          <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+            Back to home
+          </Link>
+        </div>
+      </div>
     </div>
   );
-};
-
-export default PricingPage;
+}
