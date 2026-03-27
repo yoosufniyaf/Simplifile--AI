@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { FileText, Check, ArrowRight, Zap, Loader2 } from "lucide-react";
+import { FileText, Check, ArrowRight, Zap } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -81,18 +81,11 @@ const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
   const [loadingPlans, setLoadingPlans] = useState(true);
-  const [processingSuccess, setProcessingSuccess] = useState(false);
 
   const navigate = useNavigate();
-  const location = useLocation();
-  const activationAttemptedRef = useRef(false);
 
   const auth = useAuth() || {};
-  const { token, loading: authLoading } = auth;
-
-  const query = useMemo(() => {
-    return new URLSearchParams(location.search);
-  }, [location.search]);
+  const { token } = auth;
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -154,70 +147,6 @@ const PricingPage = () => {
     fetchPlans();
   }, []);
 
-  useEffect(() => {
-    const handleSuccessfulCheckout = async () => {
-      const success =
-        query.get("success") === "true" ||
-        query.get("status") === "success" ||
-        query.get("checkout_status") === "success";
-
-      const plan = query.get("plan");
-      const billing = query.get("billing") || "monthly";
-      const storedToken = localStorage.getItem("token") || token;
-
-      if (authLoading) return;
-      if (!success) return;
-      if (!plan) return;
-      if (!storedToken) {
-        toast.error("Please log in again before completing checkout.");
-        return;
-      }
-      if (activationAttemptedRef.current) return;
-
-      activationAttemptedRef.current = true;
-      setProcessingSuccess(true);
-
-      try {
-        await axios.post(
-          `${API}/subscription/update`,
-          {
-            plan,
-            billing_cycle: billing,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${storedToken}`,
-            },
-          }
-        );
-
-        const meRes = await axios.get(`${API}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${storedToken}`,
-          },
-        });
-
-        localStorage.setItem("token", storedToken);
-        localStorage.setItem("user", JSON.stringify(meRes.data));
-
-        toast.success("Subscription activated successfully");
-
-        window.history.replaceState({}, "", "/pricing");
-        navigate("/dashboard", { replace: true });
-      } catch (error) {
-        console.error("Failed to activate subscription:", error);
-        toast.error(
-          error?.response?.data?.detail || "Could not activate subscription"
-        );
-        activationAttemptedRef.current = false;
-      } finally {
-        setProcessingSuccess(false);
-      }
-    };
-
-    handleSuccessfulCheckout();
-  }, [query, token, authLoading, navigate]);
-
   const getPrice = (plan) => {
     if (isAnnual) {
       return Number(plan.annual_monthly_price || 0).toFixed(2);
@@ -249,7 +178,7 @@ const PricingPage = () => {
 
     const fallbackPlan = fallbackPlans.find((p) => p.id === plan.id);
 
-    const checkoutUrl = isAnnual
+    let checkoutUrl = isAnnual
       ? plan?.annual_checkout_url || fallbackPlan?.annual_checkout_url
       : plan?.monthly_checkout_url || fallbackPlan?.monthly_checkout_url;
 
@@ -258,10 +187,21 @@ const PricingPage = () => {
       return;
     }
 
+    const billing = isAnnual ? "annual" : "monthly";
+    const separator = checkoutUrl.includes("?") ? "&" : "?";
+    const successUrl = encodeURIComponent(
+      `${window.location.origin}/checkout/success?plan=${plan.id}&billing=${billing}&status=success`
+    );
+
+    checkoutUrl = `${checkoutUrl}${separator}success_url=${successUrl}`;
+
     window.location.href = checkoutUrl;
   };
 
-  const displayPlans = loadingPlans ? fallbackPlans.map(normalizePlan) : plans;
+  const displayPlans = useMemo(
+    () => (loadingPlans ? fallbackPlans.map(normalizePlan) : plans),
+    [loadingPlans, plans]
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -285,13 +225,6 @@ const PricingPage = () => {
             </span>
           )}
         </div>
-
-        {processingSuccess && (
-          <div className="flex items-center justify-center gap-2 mb-8 text-primary">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Activating your subscription...</span>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {displayPlans.map((plan) => (
@@ -330,7 +263,7 @@ const PricingPage = () => {
 
               <ul className="space-y-3 mb-6 text-left">
                 {plan.features.map((feature, i) => (
-                  <li key={i} className="flex gap-2" key={`${plan.id}-${i}`}>
+                  <li key={`${plan.id}-${i}`} className="flex gap-2">
                     <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                     <span>{feature}</span>
                   </li>
