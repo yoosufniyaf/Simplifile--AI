@@ -30,13 +30,22 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  if (!token || !user) {
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
+  // If token exists but user is still syncing, don't kick them out yet.
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   if (
-    user?.subscription_status !== "trial" &&
-    user?.subscription_status !== "active"
+    user.subscription_status !== "trial" &&
+    user.subscription_status !== "active"
   ) {
     return <Navigate to="/pricing" replace />;
   }
