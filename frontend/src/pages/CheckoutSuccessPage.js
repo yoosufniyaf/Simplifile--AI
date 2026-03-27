@@ -4,6 +4,7 @@ import axios from "axios";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { useAuth } from "../context/AuthContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -12,8 +13,12 @@ const CheckoutSuccessPage = () => {
   const [searchParams] = useSearchParams();
   const pollingRef = useRef(null);
 
-  const [status, setStatus] = useState("activating"); // activating | success | error
-  const [message, setMessage] = useState("Checking your payment and activating your account...");
+  const { refreshUser } = useAuth(); // 🔥 IMPORTANT
+
+  const [status, setStatus] = useState("activating");
+  const [message, setMessage] = useState(
+    "Checking your payment and activating your account..."
+  );
 
   useEffect(() => {
     const stopPolling = () => {
@@ -29,12 +34,11 @@ const CheckoutSuccessPage = () => {
       setMessage(msg);
     };
 
-    const finishWithSuccess = (user) => {
+    const finishWithSuccess = async () => {
       stopPolling();
 
-      if (user) {
-        localStorage.setItem("user", JSON.stringify(user));
-      }
+      // 🔥 Force refresh auth context
+      await refreshUser();
 
       setStatus("success");
       setMessage("Your subscription is now active.");
@@ -47,9 +51,10 @@ const CheckoutSuccessPage = () => {
     const checkUserStatus = async () => {
       try {
         const storedToken = localStorage.getItem("token");
+
         if (!storedToken) {
           finishWithError("You are not logged in. Please log in and try again.");
-          return;
+          return false;
         }
 
         const response = await axios.get(`${API}/auth/me`, {
@@ -60,17 +65,23 @@ const CheckoutSuccessPage = () => {
 
         const user = response?.data;
         const subscriptionStatus = user?.subscription_status;
-        const plan = (user?.plan || "").toLowerCase();
 
         const isActive =
           subscriptionStatus === "active" ||
           subscriptionStatus === "trial";
 
-        if (isActive && (plan === "basic" || plan === "premium" || plan === "enterprise")) {
-          finishWithSuccess(user);
+        if (isActive) {
+          await finishWithSuccess();
+          return true;
         }
+
+        return false;
       } catch (error) {
-        console.error("Status check failed:", error?.response?.data || error.message);
+        console.error(
+          "Status check failed:",
+          error?.response?.data || error.message
+        );
+        return false;
       }
     };
 
@@ -90,27 +101,33 @@ const CheckoutSuccessPage = () => {
       }
 
       const storedToken = localStorage.getItem("token");
+
       if (!storedToken) {
         finishWithError("You are not logged in. Please log in and try again.");
         return;
       }
 
       setStatus("activating");
-      setMessage("Payment succeeded. Waiting for Whop to activate your account...");
+      setMessage(
+        "Payment succeeded. Waiting for Whop to activate your account..."
+      );
 
-      await checkUserStatus();
+      // First check immediately
+      const immediateSuccess = await checkUserStatus();
+      if (immediateSuccess) return;
 
       let attempts = 0;
-      const maxAttempts = 15; // ~30 seconds if polling every 2s
+      const maxAttempts = 15;
 
       pollingRef.current = setInterval(async () => {
         attempts += 1;
 
-        await checkUserStatus();
+        const success = await checkUserStatus();
+        if (success) return;
 
         if (attempts >= maxAttempts) {
           finishWithError(
-            "Payment may have succeeded, but your account has not activated yet. Please wait a minute and refresh, or contact support."
+            "Payment succeeded but activation is delayed. Please refresh in a few seconds."
           );
         }
       }, 2000);
@@ -118,16 +135,16 @@ const CheckoutSuccessPage = () => {
 
     startActivationFlow();
 
-    return () => {
-      stopPolling();
-    };
-  }, [navigate, searchParams]);
+    return () => stopPolling();
+  }, [navigate, searchParams, refreshUser]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle className="text-2xl text-center">Checkout Status</CardTitle>
+          <CardTitle className="text-2xl text-center">
+            Checkout Status
+          </CardTitle>
         </CardHeader>
 
         <CardContent className="flex flex-col items-center text-center gap-4 py-8">
