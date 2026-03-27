@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
@@ -10,85 +10,117 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const CheckoutSuccessPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const pollingRef = useRef(null);
 
   const [status, setStatus] = useState("activating"); // activating | success | error
-  const [message, setMessage] = useState("Activating your subscription...");
+  const [message, setMessage] = useState("Checking your payment and activating your account...");
 
   useEffect(() => {
-    const activateSubscription = async () => {
-      try {
-        const success = searchParams.get("success");
-        const checkoutStatus = searchParams.get("checkout_status");
-        const statusParam = searchParams.get("status");
-        const plan = searchParams.get("plan");
-        const billing = searchParams.get("billing");
-        const emailFromUrl = searchParams.get("email");
-        const paymentId =
-          searchParams.get("payment_id") || searchParams.get("receipt_id") || "";
-
-        const storedToken = localStorage.getItem("token");
-        const storedUser = JSON.parse(localStorage.getItem("user") || "null");
-        const email = emailFromUrl || storedUser?.email || "";
-
-        const isSuccessful =
-          success === "true" ||
-          checkoutStatus === "success" ||
-          statusParam === "success";
-
-        if (!isSuccessful) {
-          setStatus("error");
-          setMessage("Payment was not completed successfully.");
-          return;
-        }
-
-        if (!storedToken) {
-          setStatus("error");
-          setMessage("You are not logged in. Please log in and try again.");
-          return;
-        }
-
-        if (!email) {
-          setStatus("error");
-          setMessage("Could not determine your account email.");
-          return;
-        }
-
-        const response = await axios.post(
-          `${API}/subscription/activate`,
-          {
-            email,
-            plan,
-            billing,
-            payment_id: paymentId,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${storedToken}`,
-            },
-          }
-        );
-
-        if (response?.data?.user) {
-          localStorage.setItem("user", JSON.stringify(response.data.user));
-        }
-
-        setStatus("success");
-        setMessage("Your subscription is now active.");
-
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 1500);
-      } catch (error) {
-        console.error("Activation failed:", error?.response?.data || error.message);
-        setStatus("error");
-        setMessage(
-          error?.response?.data?.detail ||
-            "Payment succeeded, but activation failed. Please contact support."
-        );
+    const stopPolling = () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
     };
 
-    activateSubscription();
+    const finishWithError = (msg) => {
+      stopPolling();
+      setStatus("error");
+      setMessage(msg);
+    };
+
+    const finishWithSuccess = (user) => {
+      stopPolling();
+
+      if (user) {
+        localStorage.setItem("user", JSON.stringify(user));
+      }
+
+      setStatus("success");
+      setMessage("Your subscription is now active.");
+
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1500);
+    };
+
+    const checkUserStatus = async () => {
+      try {
+        const storedToken = localStorage.getItem("token");
+        if (!storedToken) {
+          finishWithError("You are not logged in. Please log in and try again.");
+          return;
+        }
+
+        const response = await axios.get(`${API}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${storedToken}`,
+          },
+        });
+
+        const user = response?.data;
+        const subscriptionStatus = user?.subscription_status;
+        const plan = (user?.plan || "").toLowerCase();
+
+        const isActive =
+          subscriptionStatus === "active" ||
+          subscriptionStatus === "trial";
+
+        if (isActive && (plan === "basic" || plan === "premium" || plan === "enterprise")) {
+          finishWithSuccess(user);
+        }
+      } catch (error) {
+        console.error("Status check failed:", error?.response?.data || error.message);
+      }
+    };
+
+    const startActivationFlow = async () => {
+      const success = searchParams.get("success");
+      const checkoutStatus = searchParams.get("checkout_status");
+      const statusParam = searchParams.get("status");
+
+      const isSuccessful =
+        success === "true" ||
+        checkoutStatus === "success" ||
+        statusParam === "success";
+
+      if (!isSuccessful) {
+        finishWithError("Payment was not completed successfully.");
+        return;
+      }
+
+      const storedToken = localStorage.getItem("token");
+      if (!storedToken) {
+        finishWithError("You are not logged in. Please log in and try again.");
+        return;
+      }
+
+      setStatus("activating");
+      setMessage("Payment succeeded. Waiting for Whop to activate your account...");
+
+      await checkUserStatus();
+
+      let attempts = 0;
+      const maxAttempts = 15; // ~30 seconds if polling every 2s
+
+      pollingRef.current = setInterval(async () => {
+        attempts += 1;
+
+        await checkUserStatus();
+
+        if (attempts >= maxAttempts) {
+          finishWithError(
+            "Payment may have succeeded, but your account has not activated yet. Please wait a minute and refresh, or contact support."
+          );
+        }
+      }, 2000);
+    };
+
+    startActivationFlow();
+
+    return () => {
+      stopPolling();
+    };
   }, [navigate, searchParams]);
 
   return (
@@ -103,6 +135,9 @@ const CheckoutSuccessPage = () => {
             <>
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <p className="text-lg font-medium">{message}</p>
+              <p className="text-sm text-muted-foreground">
+                This can take a few seconds after payment.
+              </p>
             </>
           )}
 
