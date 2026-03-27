@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { FileText, Check, ArrowRight, Zap } from "lucide-react";
+import { FileText, Check, ArrowRight, Zap, Loader2 } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -81,8 +81,10 @@ const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
   const [loadingPlans, setLoadingPlans] = useState(true);
+  const [processingSuccess, setProcessingSuccess] = useState(false);
 
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const auth = useAuth() || {};
   const { token } = auth;
 
@@ -100,6 +102,8 @@ const PricingPage = () => {
                     monthly_price: 9.99,
                     annual_monthly_price: 5.99,
                     annual_price: 71.88,
+                    monthly_checkout_url: "https://whop.com/checkout/plan_PPUUTjaMeSwJ2",
+                    annual_checkout_url: "https://whop.com/checkout/plan_iwtWTjCmve5Xj",
                   });
                 }
 
@@ -109,6 +113,8 @@ const PricingPage = () => {
                     monthly_price: 39.99,
                     annual_monthly_price: 23.99,
                     annual_price: 287.88,
+                    monthly_checkout_url: "https://whop.com/checkout/plan_2oAqaWyrKqxEL",
+                    annual_checkout_url: "https://whop.com/checkout/plan_6T3qi11GRXcq4",
                     features: [
                       "Everything in Basic",
                       "AI Bookkeeper Assistant",
@@ -140,6 +146,56 @@ const PricingPage = () => {
 
     fetchPlans();
   }, []);
+
+  useEffect(() => {
+    const handleSuccessfulCheckout = async () => {
+      const success = searchParams.get("success");
+      const plan = searchParams.get("plan");
+      const billing = searchParams.get("billing") || "monthly";
+      const storedToken = localStorage.getItem("token") || token;
+
+      if (success !== "true" || !plan || !storedToken || processingSuccess) {
+        return;
+      }
+
+      try {
+        setProcessingSuccess(true);
+
+        await axios.post(
+          `${API}/subscription/update`,
+          {
+            plan,
+            billing_cycle: billing,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${storedToken}`,
+            },
+          }
+        );
+
+        const meRes = await axios.get(`${API}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${storedToken}`,
+          },
+        });
+
+        localStorage.setItem("user", JSON.stringify(meRes.data));
+
+        toast.success("Subscription activated successfully");
+        navigate("/dashboard", { replace: true });
+      } catch (error) {
+        console.error("Failed to activate subscription:", error);
+        toast.error(
+          error?.response?.data?.detail || "Could not activate subscription"
+        );
+      } finally {
+        setProcessingSuccess(false);
+      }
+    };
+
+    handleSuccessfulCheckout();
+  }, [searchParams, navigate, token, processingSuccess]);
 
   const getPrice = (plan) => {
     if (isAnnual) {
@@ -206,6 +262,13 @@ const PricingPage = () => {
             </span>
           )}
         </div>
+
+        {processingSuccess && (
+          <div className="flex items-center justify-center gap-2 mb-8 text-primary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Activating your subscription...</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {displayPlans.map((plan) => (
