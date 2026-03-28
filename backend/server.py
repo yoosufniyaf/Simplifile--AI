@@ -1445,7 +1445,10 @@ async def debug_users():
         limit=20
     )
     return {"users": users}
-
+    @api_router.get("/debug/me")
+async def debug_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    return payload
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/")
