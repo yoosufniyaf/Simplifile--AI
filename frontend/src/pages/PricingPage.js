@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
@@ -101,10 +101,13 @@ const PricingPage = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [plans, setPlans] = useState(fallbackPlans.map(normalizePlan));
   const [loadingPlans, setLoadingPlans] = useState(true);
+  const [activatingCheckout, setActivatingCheckout] = useState(false);
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const auth = useAuth() || {};
   const { token, user } = auth;
+  const hasHandledCheckoutRef = useRef(false);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -172,6 +175,104 @@ const PricingPage = () => {
     fetchPlans();
   }, []);
 
+  useEffect(() => {
+    const handleCheckoutReturn = async () => {
+      const success =
+        searchParams.get("success") ||
+        searchParams.get("status") ||
+        searchParams.get("checkout_status");
+
+      const isSuccessful =
+        success === "true" ||
+        success === "success" ||
+        searchParams.get("status") === "success" ||
+        searchParams.get("checkout_status") === "success";
+
+      if (!isSuccessful || hasHandledCheckoutRef.current) {
+        return;
+      }
+
+      hasHandledCheckoutRef.current = true;
+
+      const storedToken = localStorage.getItem("token") || token;
+      const plan = searchParams.get("plan") || user?.plan || "basic";
+      const billing = searchParams.get("billing") || "monthly";
+      const email = searchParams.get("email") || user?.email || "";
+      const paymentId =
+        searchParams.get("payment_id") ||
+        searchParams.get("receipt_id") ||
+        "";
+
+      if (!storedToken) {
+        toast.error("Please log in again before activating your subscription.");
+        navigate("/login");
+        return;
+      }
+
+      try {
+        setActivatingCheckout(true);
+
+        await axios.post(
+          `${API}/subscription/activate`,
+          {
+            email,
+            plan,
+            billing,
+            payment_id: paymentId,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${storedToken}`,
+            },
+          }
+        );
+
+        const meResponse = await axios.get(`${API}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${storedToken}`,
+          },
+        });
+
+        localStorage.setItem("token", storedToken);
+        localStorage.setItem("user", JSON.stringify(meResponse.data));
+
+        if (typeof auth.setUser === "function") {
+          auth.setUser(meResponse.data);
+        }
+
+        toast.success("Subscription activated successfully.");
+
+        const cleanedParams = new URLSearchParams(searchParams);
+        [
+          "success",
+          "plan",
+          "billing",
+          "receipt_id",
+          "payment_id",
+          "checkout_status",
+          "status",
+          "state_id",
+          "email",
+        ].forEach((key) => cleanedParams.delete(key));
+
+        setSearchParams(cleanedParams, { replace: true });
+
+        window.location.replace("/dashboard");
+      } catch (error) {
+        console.error("Checkout activation failed:", error);
+        const message =
+          error?.response?.data?.detail ||
+          "Payment succeeded, but subscription activation failed.";
+        toast.error(message);
+        hasHandledCheckoutRef.current = false;
+      } finally {
+        setActivatingCheckout(false);
+      }
+    };
+
+    handleCheckoutReturn();
+  }, [searchParams, token, user, auth, navigate, setSearchParams]);
+
   const getPrice = (plan) => {
     if (isAnnual) {
       return Number(plan.annual_monthly_price || 0).toFixed(2);
@@ -224,18 +325,7 @@ const PricingPage = () => {
       return;
     }
 
-    const billing = isAnnual ? "annual" : "monthly";
-    const planId = plan?.id || "plan";
-    const userEmail = user?.email || "";
-
-    const separator = checkoutUrl.includes("?") ? "&" : "?";
-    const successUrl = encodeURIComponent(
-      `${window.location.origin}/checkout/success?success=true&plan=${planId}&billing=${billing}&email=${encodeURIComponent(
-        userEmail
-      )}`
-    );
-
-    window.location.href = `${checkoutUrl}${separator}success_url=${successUrl}`;
+    window.location.href = checkoutUrl;
   };
 
   const displayPlans = useMemo(
@@ -247,6 +337,12 @@ const PricingPage = () => {
     <div className="min-h-screen bg-background">
       <section className="py-20 md:py-28 text-center">
         <h1 className="text-5xl font-bold mb-6">Simple, transparent pricing</h1>
+
+        {activatingCheckout && (
+          <div className="mb-6 text-primary font-medium">
+            Activating your subscription...
+          </div>
+        )}
 
         <div className="flex items-center justify-center gap-4 mb-12">
           <span className={!isAnnual ? "font-medium" : "text-muted-foreground"}>
