@@ -247,7 +247,7 @@ def verify_password(password: str, hashed: str) -> bool:
 def create_token(user_id: str) -> str:
     expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
-        "sub": user_id,
+        "sub": str(user_id).strip(),
         "exp": expiration.timestamp(),
         "iat": datetime.now(timezone.utc).timestamp()
     }
@@ -346,12 +346,15 @@ def to_user_response(user: dict) -> UserResponse:
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("sub")
+        user_id = str(payload.get("sub") or "").strip()
+
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         user = table_select_one("users", {"id": user_id})
+
         if not user:
+            logger.error(f"User lookup failed for token sub={user_id}")
             raise HTTPException(status_code=401, detail="User not found")
 
         user = await normalize_user_access(user)
@@ -396,6 +399,7 @@ async def register(user_data: UserCreate):
 async def login(credentials: UserLogin):
     email = normalize_email(credentials.email)
     user = table_select_one("users", {"email": email})
+
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -1001,7 +1005,6 @@ async def upload_financial_data(
         logger.error(f"Error parsing file: {e}")
         raise HTTPException(status_code=400, detail="Error parsing file")
 
-
 @api_router.post("/bookkeeping/transactions", response_model=TransactionResponse)
 async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1025,7 +1028,6 @@ async def create_transaction(trans: TransactionCreate, user: dict = Depends(get_
     table_insert_one("transactions", trans_doc)
     return TransactionResponse(**trans_doc)
 
-
 @api_router.get("/bookkeeping/transactions", response_model=List[TransactionResponse])
 async def get_transactions(user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1043,7 +1045,6 @@ async def get_transactions(user: dict = Depends(get_current_user)):
     )
 
     return [TransactionResponse(**row) for row in rows]
-
 
 @api_router.put("/bookkeeping/transactions/{transaction_id}", response_model=TransactionResponse)
 async def update_transaction(
@@ -1069,7 +1070,6 @@ async def update_transaction(
 
     return TransactionResponse(**final_row)
 
-
 @api_router.delete("/bookkeeping/transactions/{transaction_id}")
 async def delete_transaction(transaction_id: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1082,7 +1082,6 @@ async def delete_transaction(transaction_id: str, user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     return {"message": "Transaction deleted"}
-
 
 @api_router.get("/bookkeeping/insights")
 async def get_bookkeeping_insights(user: dict = Depends(get_current_user)):
@@ -1120,7 +1119,6 @@ async def get_bookkeeping_insights(user: dict = Depends(get_current_user)):
 
     return insights_payload
 
-
 # ==================== REPORT ROUTES (PREMIUM) ====================
 
 @api_router.get("/reports/profit-loss", response_model=FinancialReportResponse)
@@ -1156,7 +1154,6 @@ async def profit_loss_report(user: dict = Depends(get_current_user)):
         },
         generated_at=now_iso()
     )
-
 
 @api_router.get("/reports/balance-sheet", response_model=FinancialReportResponse)
 async def balance_sheet_report(user: dict = Depends(get_current_user)):
@@ -1194,7 +1191,6 @@ async def balance_sheet_report(user: dict = Depends(get_current_user)):
         generated_at=now_iso()
     )
 
-
 @api_router.get("/reports/cash-flow", response_model=FinancialReportResponse)
 async def cash_flow_report(user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1218,7 +1214,6 @@ async def cash_flow_report(user: dict = Depends(get_current_user)):
         generated_at=now_iso()
     )
 
-
 @api_router.get("/reports/export/{report_type}")
 async def export_report(report_type: str, format: str = "csv", user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1233,7 +1228,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
         raise HTTPException(status_code=400, detail="Invalid export format")
 
     return {"message": f"{report_type} report export prepared in {format.upper()} format"}
-
 
 # ==================== INTEGRATIONS ROUTES (PREMIUM) ====================
 
@@ -1254,7 +1248,6 @@ async def get_integrations(user: dict = Depends(get_current_user)):
     )
 
     return [IntegrationResponse(**row) for row in rows]
-
 
 @api_router.post("/integrations/connect")
 async def connect_integration(payload: IntegrationConnect, user: dict = Depends(get_current_user)):
@@ -1288,7 +1281,6 @@ async def connect_integration(payload: IntegrationConnect, user: dict = Depends(
 
     return {"message": f"{payload.platform} connected successfully"}
 
-
 @api_router.delete("/integrations/{platform}")
 async def disconnect_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1301,7 +1293,6 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
         raise HTTPException(status_code=404, detail="Integration not found")
 
     return {"message": f"{platform} disconnected"}
-
 
 @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
@@ -1342,7 +1333,6 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
     table_insert_many("transactions", mock_transactions)
     return {"message": f"Synced {len(mock_transactions)} transactions from {platform}"}
 
-
 # ==================== TAX INSIGHTS ROUTES (PREMIUM) ====================
 
 @api_router.post("/tax/analyze", response_model=TaxInsightResponse)
@@ -1377,7 +1367,6 @@ async def analyze_tax_documents(
 
     table_insert_one("tax_insights", insight)
     return TaxInsightResponse(**{k: v for k, v in insight.items() if k != "user_id"})
-
 
 @api_router.get("/tax/insights", response_model=List[TaxInsightResponse])
 async def get_tax_insights(user: dict = Depends(get_current_user)):
@@ -1421,7 +1410,7 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
 
         transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
         stats["total_income"] = sum(t["amount"] for t in transactions if t["type"] == "income")
-        stats["total_expenses"] = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
+        stats["total_expenses"] = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense"])
 
         int_count = len(
             table_select(
@@ -1434,7 +1423,8 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         stats["integrations_connected"] = int_count
 
     return stats
-    # ==================== DEBUG ROUTES ====================
+
+# ==================== DEBUG ROUTES ====================
 
 @api_router.get("/debug/users")
 async def debug_users():
@@ -1449,6 +1439,7 @@ async def debug_users():
 async def debug_me(credentials: HTTPAuthorizationCredentials = Depends(security)):
     payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     return payload
+
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/")
