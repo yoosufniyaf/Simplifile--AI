@@ -35,7 +35,10 @@ const LoginPage = () => {
           subscriptionStatus === "trial" ||
           subscriptionStatus === "active"
         ) {
-          navigate("/dashboard");
+          const params = new URLSearchParams(window.location.search);
+const redirect = params.get("redirect");
+
+navigate(redirect || "/dashboard");
         } else {
           navigate("/pricing");
         }
