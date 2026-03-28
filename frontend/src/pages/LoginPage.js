@@ -29,16 +29,21 @@ const LoginPage = () => {
       if (data?.user || data?.session) {
         toast.success("Welcome back!");
 
+        const params = new URLSearchParams(window.location.search);
+        const redirect = params.get("redirect");
+
+        if (redirect) {
+          navigate(redirect);
+          return;
+        }
+
         const subscriptionStatus = data?.user?.subscription_status;
 
         if (
           subscriptionStatus === "trial" ||
           subscriptionStatus === "active"
         ) {
-          const params = new URLSearchParams(window.location.search);
-const redirect = params.get("redirect");
-
-navigate(redirect || "/dashboard");
+          navigate("/dashboard");
         } else {
           navigate("/pricing");
         }
