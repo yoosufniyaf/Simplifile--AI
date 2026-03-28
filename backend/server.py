@@ -274,8 +274,6 @@ def normalize_email(value: Optional[str]) -> Optional[str]:
 
 def infer_plan_from_text(*values) -> Optional[str]:
     combined = " ".join(str(v).lower() for v in values if v)
-    if "enterprise" in combined:
-        return "enterprise"
     if "premium" in combined:
         return "premium"
     if "basic" in combined:
@@ -328,7 +326,7 @@ def require_feature_access(user: dict):
         )
 
 def check_plan_access(user: dict, required_plan: str) -> bool:
-    plan_hierarchy = {"basic": 1, "premium": 2, "enterprise": 3}
+    plan_hierarchy = {"basic": 1, "premium": 2}
     user_level = plan_hierarchy.get(user.get("plan", "basic"), 1)
     required_level = plan_hierarchy.get(required_plan, 1)
     return user_level >= required_level
@@ -560,7 +558,7 @@ async def start_trial(user: dict = Depends(get_current_user)):
 
 @api_router.post("/subscription/update")
 async def update_subscription(plan_data: PlanUpdate, user: dict = Depends(get_current_user)):
-    valid_plans = ["basic", "premium", "enterprise"]
+    valid_plans = ["basic", "premium"]
     if plan_data.plan not in valid_plans:
         raise HTTPException(status_code=400, detail="Invalid plan")
 
@@ -571,7 +569,7 @@ async def update_subscription(plan_data: PlanUpdate, user: dict = Depends(get_cu
             "plan": plan_data.plan,
             "billing_cycle": plan_data.billing_cycle,
             "subscription_status": "active",
-            "trial_started": True,
+            "trial_started": False,
             "trial_ends_at": None
         }
     )
@@ -596,7 +594,7 @@ async def activate_subscription(payload: ActivateSubscriptionRequest, user: dict
             "plan": plan,
             "billing_cycle": billing_cycle,
             "subscription_status": "active",
-            "trial_started": True,
+            "trial_started": False,
             "trial_ends_at": None,
             "last_payment_id": payload.payment_id or user.get("last_payment_id")
         }
@@ -637,24 +635,14 @@ async def get_plans():
                     "AI Bookkeeper Assistant",
                     "Transaction Categorization",
                     "P&L, Monthly Summary",
-                    "MRR, Burn Rate, CAC Insights"
-                ],
-                "popular": True
-            },
-            {
-                "id": "enterprise",
-                "name": "Enterprise",
-                "monthly_price": 49.99,
-                "annual_monthly_price": 29.99,
-                "annual_price": 359.88,
-                "features": [
-                    "Everything in Premium",
+                    "MRR, Burn Rate, CAC Insights",
                     "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
                     "Financial Statements Auto-Generated",
                     "Manual Editing & Custom Entries",
                     "PDF/CSV Export",
                     "AI Tax Insights"
-                ]
+                ],
+                "popular": True
             }
         ],
         "trial_days": TRIAL_DAYS
@@ -754,7 +742,7 @@ async def whop_webhook(request: Request):
                 "plan": inferred_plan,
                 "billing_cycle": billing_cycle,
                 "subscription_status": "active",
-                "trial_started": True,
+                "trial_started": False,
                 "trial_ends_at": None,
                 "last_payment_id": payment_id
             }
@@ -1065,8 +1053,8 @@ async def update_transaction(
 ):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     existing = table_select_one("transactions", {"id": transaction_id, "user_id": user["id"]})
     if not existing:
@@ -1086,8 +1074,8 @@ async def update_transaction(
 async def delete_transaction(transaction_id: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     deleted = table_delete("transactions", {"id": transaction_id, "user_id": user["id"]})
     if not deleted:
@@ -1133,14 +1121,14 @@ async def get_bookkeeping_insights(user: dict = Depends(get_current_user)):
     return insights_payload
 
 
-# ==================== REPORT ROUTES (ENTERPRISE) ====================
+# ==================== REPORT ROUTES (PREMIUM) ====================
 
 @api_router.get("/reports/profit-loss", response_model=FinancialReportResponse)
 async def profit_loss_report(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
     revenue = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
@@ -1174,8 +1162,8 @@ async def profit_loss_report(user: dict = Depends(get_current_user)):
 async def balance_sheet_report(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
     income_total = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
@@ -1211,8 +1199,8 @@ async def balance_sheet_report(user: dict = Depends(get_current_user)):
 async def cash_flow_report(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
     cash_in = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
@@ -1235,8 +1223,8 @@ async def cash_flow_report(user: dict = Depends(get_current_user)):
 async def export_report(report_type: str, format: str = "csv", user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     if report_type not in ["profit-loss", "balance-sheet", "cash-flow"]:
         raise HTTPException(status_code=400, detail="Invalid report type")
@@ -1247,14 +1235,14 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     return {"message": f"{report_type} report export prepared in {format.upper()} format"}
 
 
-# ==================== INTEGRATIONS ROUTES (ENTERPRISE) ====================
+# ==================== INTEGRATIONS ROUTES (PREMIUM) ====================
 
 @api_router.get("/integrations", response_model=List[IntegrationResponse])
 async def get_integrations(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     rows = table_select(
         "integrations",
@@ -1272,8 +1260,8 @@ async def get_integrations(user: dict = Depends(get_current_user)):
 async def connect_integration(payload: IntegrationConnect, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     existing = table_select_one("integrations", {"user_id": user["id"], "platform": payload.platform})
 
@@ -1305,8 +1293,8 @@ async def connect_integration(payload: IntegrationConnect, user: dict = Depends(
 async def disconnect_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     deleted = table_delete("integrations", {"user_id": user["id"], "platform": platform})
     if not deleted:
@@ -1319,8 +1307,8 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     integration = table_select_one("integrations", {"user_id": user["id"], "platform": platform})
     if not integration:
@@ -1355,7 +1343,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
     return {"message": f"Synced {len(mock_transactions)} transactions from {platform}"}
 
 
-# ==================== TAX INSIGHTS ROUTES (ENTERPRISE) ====================
+# ==================== TAX INSIGHTS ROUTES (PREMIUM) ====================
 
 @api_router.post("/tax/analyze", response_model=TaxInsightResponse)
 async def analyze_tax_documents(
@@ -1364,8 +1352,8 @@ async def analyze_tax_documents(
 ):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     await file.read()
 
@@ -1395,8 +1383,8 @@ async def analyze_tax_documents(
 async def get_tax_insights(user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
-    if not check_plan_access(user, "enterprise"):
-        raise HTTPException(status_code=403, detail="Enterprise plan required")
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
 
     insights = table_select(
         "tax_insights",
@@ -1435,8 +1423,14 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         stats["total_income"] = sum(t["amount"] for t in transactions if t["type"] == "income")
         stats["total_expenses"] = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
 
-    if check_plan_access(user, "enterprise"):
-        int_count = len(table_select("integrations", {"user_id": user["id"], "status": "connected"}, columns="id", limit=100))
+        int_count = len(
+            table_select(
+                "integrations",
+                {"user_id": user["id"], "status": "connected"},
+                columns="id",
+                limit=100
+            )
+        )
         stats["integrations_connected"] = int_count
 
     return stats
