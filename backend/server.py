@@ -1434,7 +1434,10 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         stats["integrations_connected"] = int_count
 
     return stats
-    @api_router.get("/debug/users")
+    
+    # ==================== DEBUG ROUTES ====================
+
+@api_router.get("/debug/users")
 async def debug_users():
     users = table_select(
         "users",
