@@ -1410,8 +1410,7 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
 
         transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
         stats["total_income"] = sum(t["amount"] for t in transactions if t["type"] == "income")
-        stats["total_expenses"] = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense"])
-
+        stats["total_expenses"] = sum(abs(t["amount"]) for t in transactions if t["type"] == "expense")
         int_count = len(
             table_select(
                 "integrations",
