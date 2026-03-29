@@ -11,8 +11,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../components/ui/dialog";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
 import {
   Link2,
   Lock,
@@ -67,13 +65,12 @@ const IntegrationsPage = () => {
   const [syncing, setSyncing] = useState(null);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState(null);
-  const [apiKey, setApiKey] = useState("");
-  const [apiSecret, setApiSecret] = useState("");
+  const [connecting, setConnecting] = useState(false);
 
-  const hasEnterpriseAccess = checkPlanAccess("enterprise");
+  const hasPremiumAccess = checkPlanAccess("premium");
 
   const fetchIntegrations = useCallback(async () => {
-    if (!hasEnterpriseAccess) {
+    if (!hasPremiumAccess) {
       setLoading(false);
       return;
     }
@@ -100,34 +97,38 @@ const IntegrationsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [token, hasEnterpriseAccess]);
+  }, [token, hasPremiumAccess]);
 
   useEffect(() => {
     fetchIntegrations();
   }, [fetchIntegrations]);
 
+  const closeConnectDialog = () => {
+    setConnectDialogOpen(false);
+    setSelectedPlatform(null);
+    setConnecting(false);
+  };
+
   const handleConnect = async () => {
     if (!selectedPlatform) return;
+
+    setConnecting(true);
 
     try {
       await axios.post(
         `${API}/integrations/connect`,
         {
           platform: selectedPlatform,
-          api_key: apiKey,
-          api_secret: apiSecret,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       toast.success(`${PLATFORM_INFO[selectedPlatform].name} connected successfully`);
-      setConnectDialogOpen(false);
-      setApiKey("");
-      setApiSecret("");
-      setSelectedPlatform(null);
+      closeConnectDialog();
       await fetchIntegrations();
     } catch (error) {
       toast.error(error?.response?.data?.detail || "Failed to connect integration");
+      setConnecting(false);
     }
   };
 
@@ -164,26 +165,27 @@ const IntegrationsPage = () => {
 
   const openConnectDialog = (platform) => {
     setSelectedPlatform(platform);
-    setApiKey("");
-    setApiSecret("");
     setConnectDialogOpen(true);
   };
 
-  if (!hasEnterpriseAccess) {
+  if (!hasPremiumAccess) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center" data-testid="integrations-locked">
+      <div
+        className="flex flex-col items-center justify-center h-[60vh] text-center"
+        data-testid="integrations-locked"
+      >
         <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
           <Lock className="h-8 w-8 text-primary" />
         </div>
         <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
-          Enterprise Feature
+          Premium Feature
         </h2>
         <p className="text-muted-foreground mb-6 max-w-md">
-          Upgrade to Enterprise to connect Shopify, Stripe, PayPal, and Whop for automatic
+          Upgrade to Premium to connect Shopify, Stripe, PayPal, and Whop for automatic
           transaction imports.
         </p>
-        <Button className="glow-button" onClick={() => (window.location.href = "/dashboard/settings")}>
-          Upgrade to Enterprise
+        <Button className="glow-button" onClick={() => (window.location.href = "/pricing")}>
+          Upgrade to Premium
         </Button>
       </div>
     );
@@ -236,7 +238,11 @@ const IntegrationsPage = () => {
           const isConnected = integration.status === "connected";
 
           return (
-            <Card key={integration.platform} className="card-hover" data-testid={`integration-${integration.platform}`}>
+            <Card
+              key={integration.platform}
+              className="card-hover"
+              data-testid={`integration-${integration.platform}`}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-4">
@@ -330,37 +336,25 @@ const IntegrationsPage = () => {
               Connect {selectedPlatform ? PLATFORM_INFO[selectedPlatform].name : "Platform"}
             </DialogTitle>
             <DialogDescription>
-              For now, you can enter placeholder credentials. Your current backend supports demo
-              connection flow first.
+              Connect this platform to import transactions automatically. Secure OAuth connection
+              can be added later, but for now this will connect through your current backend demo flow.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div>
-              <Label>API Key</Label>
-              <Input
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter API key"
-              />
-            </div>
-
-            <div>
-              <Label>API Secret</Label>
-              <Input
-                value={apiSecret}
-                onChange={(e) => setApiSecret(e.target.value)}
-                placeholder="Enter API secret"
-              />
-            </div>
+          <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            No API key is needed here. Just click connect to continue.
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConnectDialogOpen(false)}>
+            <Button variant="outline" onClick={closeConnectDialog} disabled={connecting}>
               Cancel
             </Button>
-            <Button onClick={handleConnect}>
-              <Zap className="mr-2 h-4 w-4" />
+            <Button onClick={handleConnect} disabled={connecting || !selectedPlatform}>
+              {connecting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Zap className="mr-2 h-4 w-4" />
+              )}
               Connect
             </Button>
           </DialogFooter>
