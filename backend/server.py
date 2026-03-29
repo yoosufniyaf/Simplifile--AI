@@ -66,69 +66,364 @@ logger = logging.getLogger(__name__)
 # ==================== AI FUNCTIONS ====================
 
 async def ai_analyze_document(text, filename):
-    response = openai_client.responses.create(
-        model=OPENAI_MODEL,
-        input=(
-            "Analyze this document and explain it clearly.\n\n"
-            f"Filename: {filename}\n\n"
-            f"Document:\n{text[:8000]}"
-        )
-    )
-    output = response.output_text or ""
+    try:
+        response = openai_client.responses.create(
+            model=OPENAI_MODEL,
+            input=f"""
+You are Simplifile AI, a premium financial and business document analyst.
 
-    return {
-        "summary": output,
-        "key_points": [],
-        "risks": [],
-        "obligations": [],
-        "simple_explanation": output,
-        "what_this_means": output
-    }
+Your job is to analyze ONLY documents related to:
+- finance
+- bookkeeping
+- accounting
+- tax
+- invoices
+- receipts
+- payroll
+- cash flow
+- profit and loss
+- balance sheets
+- bank statements
+- business operations
+- contracts that affect money, revenue, expenses, obligations, compliance, or risk
+
+If the document is unrelated to finance, tax, bookkeeping, business operations, compliance, or money matters, do NOT analyze it normally.
+
+Instead return EXACTLY this style of response:
+SUMMARY: This document does not appear to be related to finance, bookkeeping, tax, business operations, or financial compliance.
+KEY POINTS:
+- Topic not related to Simplifile AI's financial analysis scope.
+RISKS:
+- No financial risk analysis available because the document is outside scope.
+OBLIGATIONS:
+- No financial or compliance obligations identified within Simplifile AI's supported scope.
+SIMPLE EXPLANATION:
+This document is outside the platform's finance-focused analysis area.
+WHAT THIS MEANS:
+Upload a finance, tax, bookkeeping, invoice, receipt, payroll, bank, or business-related document for a full premium analysis.
+
+If the document IS relevant, return EXACTLY in this format:
+
+SUMMARY:
+Write a sharp premium 2-4 sentence executive summary.
+
+KEY POINTS:
+- Bullet
+- Bullet
+- Bullet
+
+RISKS:
+- Bullet
+- Bullet
+- Bullet
+
+OBLIGATIONS:
+- Bullet
+- Bullet
+- Bullet
+
+SIMPLE EXPLANATION:
+Explain in very simple plain English.
+
+WHAT THIS MEANS:
+Give direct next steps in a premium advisory tone.
+
+Rules:
+- Sound premium, sharp, and professional
+- Be direct, not fluffy
+- Focus on business impact
+- If something is missing, say so clearly
+- Do not talk about being an AI
+- Do not use markdown headings with #
+- Keep bullets clean
+
+Filename: {filename}
+
+Document:
+{text[:12000]}
+"""
+        )
+        output = (response.output_text or "").strip()
+
+        def extract_section(text_value: str, section_name: str, next_sections: list[str]) -> str:
+            upper_text = text_value
+            start_token = f"{section_name}:"
+            start = upper_text.find(start_token)
+            if start == -1:
+                return ""
+            start += len(start_token)
+            end = len(upper_text)
+            for next_section in next_sections:
+                idx = upper_text.find(f"{next_section}:", start)
+                if idx != -1 and idx < end:
+                    end = idx
+            return upper_text[start:end].strip()
+
+        summary = extract_section(
+            output,
+            "SUMMARY",
+            ["KEY POINTS", "RISKS", "OBLIGATIONS", "SIMPLE EXPLANATION", "WHAT THIS MEANS"]
+        )
+        key_points_raw = extract_section(
+            output,
+            "KEY POINTS",
+            ["RISKS", "OBLIGATIONS", "SIMPLE EXPLANATION", "WHAT THIS MEANS"]
+        )
+        risks_raw = extract_section(
+            output,
+            "RISKS",
+            ["OBLIGATIONS", "SIMPLE EXPLANATION", "WHAT THIS MEANS"]
+        )
+        obligations_raw = extract_section(
+            output,
+            "OBLIGATIONS",
+            ["SIMPLE EXPLANATION", "WHAT THIS MEANS"]
+        )
+        simple_explanation = extract_section(
+            output,
+            "SIMPLE EXPLANATION",
+            ["WHAT THIS MEANS"]
+        )
+        what_this_means = extract_section(
+            output,
+            "WHAT THIS MEANS",
+            []
+        )
+
+        def bullets_to_list(raw: str):
+            lines = [line.strip() for line in raw.splitlines() if line.strip()]
+            cleaned = []
+            for line in lines:
+                if line.startswith("-"):
+                    cleaned.append(line[1:].strip())
+                else:
+                    cleaned.append(line.strip())
+            return [item for item in cleaned if item]
+
+        return {
+            "summary": summary or output,
+            "key_points": bullets_to_list(key_points_raw),
+            "risks": bullets_to_list(risks_raw),
+            "obligations": bullets_to_list(obligations_raw),
+            "simple_explanation": simple_explanation or output,
+            "what_this_means": what_this_means or output
+        }
+
+    except Exception as e:
+        logger.error(f"OPENAI DOCUMENT ERROR: {e}")
+        raise HTTPException(status_code=500, detail="Document analysis failed")
+
 
 async def chat_with_context(message, context=None, document_name=None):
-    response = openai_client.responses.create(
-        model=OPENAI_MODEL,
-        input=(
-            f"User message:\n{message}\n\n"
-            f"Document name:\n{document_name or 'None'}\n\n"
-            f"Context:\n{context or 'None'}"
+    try:
+        response = openai_client.responses.create(
+            model=OPENAI_MODEL,
+            input=f"""
+You are Simplifile AI, a premium CFO-style financial assistant.
+
+Your scope is ONLY:
+- finance
+- bookkeeping
+- accounting
+- taxes
+- revenue
+- profit
+- expenses
+- cash flow
+- business metrics
+- financial documents
+- money-related contracts
+- business compliance tied to finance
+
+If the user's message is unrelated to finance, bookkeeping, tax, money, business operations, financial documents, or business compliance, respond professionally like this:
+
+This topic appears to be outside Simplifile AI's finance-focused scope. I can help with bookkeeping, tax insights, financial analysis, reports, cash flow, revenue, expenses, and business-related document guidance.
+
+If relevant, ask them to send a finance-related question.
+
+If the user's message IS relevant:
+- respond in a premium, concise, expert tone
+- be direct and useful
+- prioritize business value
+- explain clearly
+- if there is context, use it
+- always end with a short "What to do next" section
+- do not ramble
+- do not sound generic
+- do not mention being an AI model
+
+User message:
+{message}
+
+Document name:
+{document_name or "None"}
+
+Document context:
+{context or "None"}
+"""
         )
-    )
-    return response.output_text or ""
+        return (response.output_text or "").strip()
+
+    except Exception as e:
+        logger.error(f"OPENAI CHAT ERROR: {e}")
+        raise HTTPException(status_code=500, detail="Chat failed")
+
 
 async def ai_categorize_transaction(description):
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=f"Categorize this transaction into a simple business category and return only the category name:\n{description}"
-    )
-    return (response.text or "other").strip().lower()
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=f"""
+You are a bookkeeping assistant.
+
+Categorize this transaction into the single best business category.
+
+Possible categories:
+sales
+fees
+software
+marketing
+advertising
+taxes
+payroll
+contractors
+office
+travel
+education
+subscriptions
+bank_fees
+refunds
+other
+
+Return ONLY the category name.
+Transaction: {description}
+"""
+        )
+        return (response.text or "other").strip().lower()
+    except Exception as e:
+        logger.error(f"GEMINI CATEGORIZE ERROR: {e}")
+        return "other"
+
 
 async def generate_financial_insights(transactions):
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=f"Give short and useful financial insights for these transactions:\n{transactions}"
-    )
-    return response.text or "AI financial analysis is temporarily unavailable."
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=f"""
+You are a premium AI CFO.
+
+Review these business transactions and return a premium executive financial analysis.
+
+Write in this exact structure:
+
+BUSINESS SUMMARY:
+2-4 sharp sentences.
+
+BIGGEST CONCERNS:
+- Bullet
+- Bullet
+- Bullet
+
+BIGGEST OPPORTUNITIES:
+- Bullet
+- Bullet
+- Bullet
+
+CASH FLOW ANALYSIS:
+Short direct explanation.
+
+RECOMMENDED ACTIONS:
+1. Step
+2. Step
+3. Step
+
+Rules:
+- Sound premium and commercially smart
+- Be practical
+- Focus on business performance
+- Mention waste, weak margins, or growth opportunities when visible
+- No fluff
+- No generic motivation talk
+
+Transactions:
+{transactions[:200]}
+"""
+        )
+        return (response.text or "AI financial analysis is temporarily unavailable.").strip()
+    except Exception as e:
+        logger.error(f"GEMINI FINANCIAL INSIGHTS ERROR: {e}")
+        return "AI financial analysis is temporarily unavailable."
+
 
 async def generate_tax_insights(transactions, total_expenses):
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=(
-            "Give tax insights for this business data.\n\n"
-            f"Transactions:\n{transactions}\n\n"
-            f"Total expenses: {total_expenses}"
-        )
-    )
-    text = response.text or "AI tax analysis is temporarily unavailable."
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=f"""
+You are a premium tax strategist for online businesses.
 
-    return {
-        "deductions": [],
-        "estimated_taxes": {},
-        "planning_insights": [text],
-        "structure_advice": [],
-        "ai_analysis": text,
-        "total_deductible": total_expenses
-    }
+Analyze the data below and return a high-value tax advisory response.
+
+Write in this exact structure:
+
+TOP DEDUCTIONS:
+- Bullet
+- Bullet
+- Bullet
+
+ESTIMATED TAX POSITION:
+Give a practical rough estimate, not legal certainty.
+
+TAX SAVING STRATEGIES:
+- Bullet
+- Bullet
+- Bullet
+
+WARNINGS:
+- Bullet
+- Bullet
+
+WHAT TO DO NEXT:
+1. Step
+2. Step
+3. Step
+
+Rules:
+- Be professional and commercially useful
+- Focus on realistic tax-saving actions
+- Focus on deductions, compliance risks, missing records, and planning
+- No fluff
+- Do not say "consult a professional" repeatedly
+- Sound premium
+
+Transactions:
+{transactions[:200]}
+
+Total expenses:
+{total_expenses}
+"""
+        )
+        text = (response.text or "AI tax analysis is temporarily unavailable.").strip()
+
+        return {
+            "deductions": [],
+            "estimated_taxes": {},
+            "planning_insights": [text],
+            "structure_advice": [],
+            "ai_analysis": text,
+            "total_deductible": total_expenses
+        }
+
+    except Exception as e:
+        logger.error(f"GEMINI TAX ERROR: {e}")
+        return {
+            "deductions": [],
+            "estimated_taxes": {},
+            "planning_insights": ["AI tax analysis is temporarily unavailable."],
+            "structure_advice": [],
+            "ai_analysis": "AI tax analysis is temporarily unavailable.",
+            "total_deductible": total_expenses
+        }
 
 # ==================== MODELS ====================
 
