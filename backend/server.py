@@ -36,6 +36,11 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
 WHOP_WEBHOOK_KEY = os.environ.get("WHOP_WEBHOOK_KEY", "")
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
+OPENAI_MODEL = "gpt-4o-mini"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 whop_client = Whop(
     api_key=WHOP_API_KEY,
@@ -46,7 +51,14 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "simplifile-ai-secret-key-2024")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 TRIAL_DAYS = 3
+from openai import OpenAI
+from google import genai
 
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
+OPENAI_MODEL = "gpt-4o-mini"
+GEMINI_MODEL = "gemini-2.5-flash"
 app = FastAPI(title="Simplifile AI API")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
