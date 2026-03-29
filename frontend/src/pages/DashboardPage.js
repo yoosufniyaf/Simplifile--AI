@@ -333,12 +333,12 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-muted-foreground">Connected platforms</span>
                 <span className="font-medium">
-                  {stats?.integrations_connected || 0} / 4
+                  {stats?.integrations_connected || 0} / 3
                 </span>
               </div>
 
               <Progress
-                value={(stats?.integrations_connected || 0) * 25}
+                value={(stats?.integrations_connected || 0) * 33.33}
                 className="h-2 mb-4"
               />
 
