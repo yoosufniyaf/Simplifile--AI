@@ -32,12 +32,6 @@ const PLATFORM_INFO = {
     icon: "🛍️",
     color: "bg-green-500/20 text-green-400 border-green-500/30",
   },
-  stripe: {
-    name: "Stripe",
-    description: "Sync payments, subscriptions, and payouts",
-    icon: "💳",
-    color: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  },
   paypal: {
     name: "PayPal",
     description: "Import transactions and fees",
