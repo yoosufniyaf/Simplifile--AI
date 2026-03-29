@@ -665,7 +665,8 @@ async def get_plans():
 @api_router.post("/webhook/whop")
 async def whop_webhook(request: Request):
     try:
-        request_body_text = await request.text()
+        raw_body = await request.body()
+        request_body_text = raw_body.decode("utf-8")
         headers = dict(request.headers)
 
         webhook_data = whop_client.webhooks.unwrap(
@@ -700,8 +701,7 @@ async def whop_webhook(request: Request):
         inferred_plan = infer_plan_from_text(plan_hint) or user.get("plan", "basic")
         billing_cycle = infer_billing_from_text(plan_hint)
 
-        # Exact Whop-style payment success handling
-        if event_type == "payment.succeeded":
+        if event_type in {"payment_succeeded", "payment.succeeded"}:
             payment_id = (
                 data.get("payment_id")
                 or data.get("invoice_id")
@@ -761,10 +761,12 @@ async def whop_webhook(request: Request):
 
             return {"status": "activated"}
 
-        # Membership deactivated / payment failure / refund-like outcomes
         if event_type in {
+            "membership_deactivated",
             "membership.deactivated",
+            "payment_failed",
             "payment.failed",
+            "payment_refunded",
             "payment.refunded",
         }:
             table_update(
