@@ -42,7 +42,10 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
 WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
 WHOP_WEBHOOK_KEY = os.environ.get("WHOP_WEBHOOK_KEY", "")
 
-whop_client = Whop(api_key=WHOP_API_KEY)
+whop_client = Whop(
+    api_key=WHOP_API_KEY,
+    webhook_key=WHOP_WEBHOOK_KEY,
+)
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "simplifile-ai-secret-key-2024")
 JWT_ALGORITHM = "HS256"
@@ -672,8 +675,8 @@ async def whop_webhook(request: Request):
 
         logger.info(f"Verified Whop webhook: {webhook_data}")
 
-        event_type = webhook_data.get("type")
-        data = webhook_data.get("data", {})
+        event_type = str(webhook_data.get("type") or "")
+        data = webhook_data.get("data", {}) or {}
 
         customer_email = normalize_email(
             data.get("customer_email")
@@ -693,36 +696,12 @@ async def whop_webhook(request: Request):
         if not user:
             return {"status": "ignored", "reason": "user not found"}
 
-        event_text = f"{event_type} {json.dumps(data)}".lower()
-
-        cancelled_keywords = [
-            "cancel", "cancelled", "canceled", "refund",
-            "refunded", "chargeback", "dispute", "revoked", "expired"
-        ]
-
-        paid_keywords = [
-            "payment", "purchase", "checkout",
-            "subscription", "membership", "paid", "succeeded"
-        ]
-
         plan_hint = json.dumps(data)
         inferred_plan = infer_plan_from_text(plan_hint) or user.get("plan", "basic")
         billing_cycle = infer_billing_from_text(plan_hint)
 
-        if any(word in event_text for word in cancelled_keywords):
-            table_update(
-                "users",
-                {"id": user["id"]},
-                {
-                    "subscription_status": "inactive",
-                    "trial_started": False,
-                    "trial_ends_at": None
-                }
-            )
-
-            return {"status": "deactivated"}
-
-        if any(word in event_text for word in paid_keywords):
+        # Exact Whop-style payment success handling
+        if event_type == "payment.succeeded":
             payment_id = (
                 data.get("payment_id")
                 or data.get("invoice_id")
@@ -782,7 +761,24 @@ async def whop_webhook(request: Request):
 
             return {"status": "activated"}
 
-        return {"status": "ignored"}
+        # Membership deactivated / payment failure / refund-like outcomes
+        if event_type in {
+            "membership.deactivated",
+            "payment.failed",
+            "payment.refunded",
+        }:
+            table_update(
+                "users",
+                {"id": user["id"]},
+                {
+                    "subscription_status": "inactive",
+                    "trial_started": False,
+                    "trial_ends_at": None
+                }
+            )
+            return {"status": "deactivated"}
+
+        return {"status": "ignored", "event_type": event_type}
 
     except Exception as e:
         logger.error(f"WHOP WEBHOOK ERROR: {e}")
