@@ -106,7 +106,6 @@ export default function DashboardLayout() {
               ? "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               : "text-muted-foreground/50 cursor-not-allowed"
         )}
-        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <item.icon className="h-5 w-5" />
         <span>{item.label}</span>
@@ -117,6 +116,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* MOBILE HEADER */}
       <header className="lg:hidden glass-nav sticky top-0 z-50 px-4 py-3 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -129,7 +129,6 @@ export default function DashboardLayout() {
           variant="ghost"
           size="icon"
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          data-testid="mobile-menu-toggle"
         >
           {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
@@ -142,6 +141,7 @@ export default function DashboardLayout() {
         />
       )}
 
+      {/* SIDEBAR */}
       <aside
         className={joinClasses(
           "fixed top-0 left-0 h-full w-64 bg-card border-r border-border z-50 transition-transform duration-300",
@@ -152,14 +152,11 @@ export default function DashboardLayout() {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-border">
             <Link to="/dashboard" className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary glow-button flex items-center justify-center">
+              <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
                 <FileText className="h-5 w-5 text-white" />
               </div>
               <div>
-                <span
-                  className="font-semibold text-lg block"
-                  style={{ fontFamily: "Outfit, sans-serif" }}
-                >
+                <span className="font-semibold text-lg block">
                   Simplifile
                 </span>
                 <span className="text-xs text-muted-foreground">AI CFO Platform</span>
@@ -173,6 +170,7 @@ export default function DashboardLayout() {
             ))}
           </nav>
 
+          {/* USER */}
           <div className="p-4 border-t border-border">
             <div className="flex items-center gap-3 px-2 py-2 mb-3 rounded-lg bg-muted/30">
               <div className="flex items-center gap-2">
@@ -191,11 +189,7 @@ export default function DashboardLayout() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 px-2"
-                  data-testid="user-menu"
-                >
+                <Button variant="ghost" className="w-full justify-start gap-3 px-2">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary/20 text-primary">
                       {user?.name?.charAt(0)?.toUpperCase() || "U"}
@@ -211,7 +205,7 @@ export default function DashboardLayout() {
 
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem asChild>
-                  <Link to="/dashboard/settings" className="cursor-pointer">
+                  <Link to="/dashboard/settings">
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </Link>
@@ -221,8 +215,7 @@ export default function DashboardLayout() {
 
                 <DropdownMenuItem
                   onClick={handleLogout}
-                  className="text-destructive cursor-pointer"
-                  data-testid="logout-btn"
+                  className="text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout
@@ -233,7 +226,16 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
+      {/* MAIN CONTENT */}
       <main className="lg:ml-64 min-h-screen">
+
+        {/* ✅ AI DISCLAIMER */}
+        <div className="px-6 pt-4">
+          <div className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-2">
+            ⚠️ Simplifile AI may make mistakes. Always verify important information.
+          </div>
+        </div>
+
         <div className="p-6 lg:p-8">
           <Outlet />
         </div>
