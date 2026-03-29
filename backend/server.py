@@ -673,8 +673,6 @@ async def whop_webhook(request: Request):
     request_body_text,
     headers
 )
-        )
-
         logger.info(f"Verified Whop webhook: {webhook_data}")
 
         event_type = str(webhook_data.get("type") or "")
