@@ -202,12 +202,9 @@ const PricingPage = () => {
         "";
 
       if (!storedToken) {
+        const redirectPath = `/pricing?${searchParams.toString()}`;
         toast.error("Please log in again before activating your subscription.");
-        navigate(
-          `/login?redirect=${encodeURIComponent(
-            window.location.pathname + window.location.search
-          )}`
-        );
+        navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
         return;
       }
 
@@ -302,15 +299,17 @@ const PricingPage = () => {
 
   const handlePlanClick = (plan) => {
     const storedToken = localStorage.getItem("token") || token;
+    const billing = isAnnual ? "annual" : "monthly";
+    const planId = plan?.id || "basic";
 
-    if (!storedToken) {
-      navigate("/register");
+    if (!storedToken || !user) {
+      navigate(`/register?plan=${planId}&billing=${billing}`);
       return;
     }
 
     const fallbackPlan = fallbackPlans.find((p) => p.id === plan.id);
 
-    let checkoutUrl = isAnnual
+    const checkoutUrl = isAnnual
       ? plan?.annual_checkout_url || fallbackPlan?.annual_checkout_url
       : plan?.monthly_checkout_url || fallbackPlan?.monthly_checkout_url;
 
@@ -327,8 +326,6 @@ const PricingPage = () => {
       return;
     }
 
-    const billing = isAnnual ? "annual" : "monthly";
-    const planId = plan?.id || "basic";
     const userEmail = user?.email || "";
 
     const successParams = new URLSearchParams({
@@ -415,7 +412,9 @@ const PricingPage = () => {
                 )}
 
                 {!isAnnual && (
-                  <p className="text-sm text-green-600 mb-4">Includes 3-day free trial</p>
+                  <p className="text-sm text-green-600 mb-4">
+                    Includes 3-day free trial
+                  </p>
                 )}
               </div>
 
