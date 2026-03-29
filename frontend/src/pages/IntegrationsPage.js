@@ -46,7 +46,9 @@ const PLATFORM_INFO = {
   },
 };
 
-const DEFAULT_PLATFORMS = Object.keys(PLATFORM_INFO).map((platform) => ({
+const PLATFORM_KEYS = Object.keys(PLATFORM_INFO);
+
+const DEFAULT_PLATFORMS = PLATFORM_KEYS.map((platform) => ({
   platform,
   status: "not_connected",
   connected_at: null,
@@ -79,7 +81,7 @@ const IntegrationsPage = () => {
       );
 
       setIntegrations(
-        Object.keys(PLATFORM_INFO).map((platform) => ({
+        PLATFORM_KEYS.map((platform) => ({
           platform,
           status: byPlatform.get(platform)?.status || "not_connected",
           connected_at: byPlatform.get(platform)?.connected_at || null,
@@ -175,8 +177,7 @@ const IntegrationsPage = () => {
           Premium Feature
         </h2>
         <p className="text-muted-foreground mb-6 max-w-md">
-          Upgrade to Premium to connect Shopify, Stripe, PayPal, and Whop for automatic
-          transaction imports.
+          Upgrade to Premium to connect Shopify, PayPal, and Whop for automatic transaction imports.
         </p>
         <Button className="glow-button" onClick={() => (window.location.href = "/pricing")}>
           Upgrade to Premium
@@ -194,6 +195,7 @@ const IntegrationsPage = () => {
   }
 
   const connectedCount = integrations.filter((i) => i.status === "connected").length;
+  const totalPlatforms = PLATFORM_KEYS.length;
 
   return (
     <div className="space-y-6" data-testid="integrations-page">
@@ -215,7 +217,7 @@ const IntegrationsPage = () => {
               </div>
               <div>
                 <p className="text-lg font-semibold" style={{ fontFamily: "Outfit, sans-serif" }}>
-                  {connectedCount} of 4 Connected
+                  {connectedCount} of {totalPlatforms} Connected
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Connect all platforms for complete financial visibility
@@ -331,7 +333,7 @@ const IntegrationsPage = () => {
             </DialogTitle>
             <DialogDescription>
               Connect this platform to import transactions automatically. Secure OAuth connection
-              can be added later, but for now this will connect through your current backend demo flow.
+              can be added later, but for now this will connect through your current backend flow.
             </DialogDescription>
           </DialogHeader>
 
