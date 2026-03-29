@@ -43,6 +43,7 @@ WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
 WHOP_WEBHOOK_KEY = os.environ.get("WHOP_WEBHOOK_KEY", "")
 
 whop_client = Whop(api_key=WHOP_API_KEY)
+
 JWT_SECRET = os.environ.get("JWT_SECRET", "simplifile-ai-secret-key-2024")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
@@ -661,22 +662,19 @@ async def get_plans():
 @api_router.post("/webhook/whop")
 async def whop_webhook(request: Request):
     try:
-        raw_body = await request.body()
+        request_body_text = await request.text()
         headers = dict(request.headers)
 
-        # 🔐 VERIFY WEBHOOK (IMPORTANT)
-        event = whop_client.webhooks.unwrap(
-            raw_body,
-            headers,
-            WHOP_WEBHOOK_KEY
+        webhook_data = whop_client.webhooks.unwrap(
+            request_body_text,
+            {"headers": headers}
         )
 
-        logger.info(f"Verified Whop webhook: {event}")
+        logger.info(f"Verified Whop webhook: {webhook_data}")
 
-        event_type = event.get("type")
-        data = event.get("data", {})
+        event_type = webhook_data.get("type")
+        data = webhook_data.get("data", {})
 
-        # 🔍 GET EMAIL
         customer_email = normalize_email(
             data.get("customer_email")
             or data.get("email")
@@ -695,7 +693,6 @@ async def whop_webhook(request: Request):
         if not user:
             return {"status": "ignored", "reason": "user not found"}
 
-        # 🧠 DETECT EVENT TYPE
         event_text = f"{event_type} {json.dumps(data)}".lower()
 
         cancelled_keywords = [
@@ -712,7 +709,6 @@ async def whop_webhook(request: Request):
         inferred_plan = infer_plan_from_text(plan_hint) or user.get("plan", "basic")
         billing_cycle = infer_billing_from_text(plan_hint)
 
-        # ❌ CANCEL / REFUND
         if any(word in event_text for word in cancelled_keywords):
             table_update(
                 "users",
@@ -726,9 +722,19 @@ async def whop_webhook(request: Request):
 
             return {"status": "deactivated"}
 
-        # ✅ PAYMENT SUCCESS
         if any(word in event_text for word in paid_keywords):
-            payment_id = data.get("id")
+            payment_id = (
+                data.get("payment_id")
+                or data.get("invoice_id")
+                or data.get("id")
+            )
+
+            amount_value = data.get("amount")
+            amount = 0.0
+            try:
+                amount = float(amount_value) / 100 if amount_value is not None else 0.0
+            except Exception:
+                amount = 0.0
 
             table_update(
                 "users",
@@ -743,20 +749,36 @@ async def whop_webhook(request: Request):
                 }
             )
 
-            # 💰 SAVE TRANSACTION
-            transaction = {
-                "id": str(uuid.uuid4()),
-                "user_id": user["id"],
-                "description": "Whop Payment",
-                "amount": float(data.get("amount", 0)) / 100 if data.get("amount") else 0,
-                "category": "income",
-                "date": now_iso()[:10],
-                "type": "income",
-                "source": "whop",
-                "created_at": now_iso()
-            }
+            existing_transaction = None
+            if payment_id:
+                existing_rows = table_select(
+                    "transactions",
+                    filters={"user_id": user["id"]},
+                    columns="id,description,amount,category,date,type,source,created_at",
+                    limit=1000
+                )
+                existing_transaction = next(
+                    (
+                        row for row in existing_rows
+                        if row.get("source") == "whop"
+                        and payment_id in str(row.get("description", ""))
+                    ),
+                    None
+                )
 
-            table_insert_one("transactions", transaction)
+            if not existing_transaction:
+                transaction = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user["id"],
+                    "description": f"Whop Payment {payment_id or ''}".strip(),
+                    "amount": amount,
+                    "category": "sales",
+                    "date": now_iso()[:10],
+                    "type": "income",
+                    "source": "whop",
+                    "created_at": now_iso()
+                }
+                table_insert_one("transactions", transaction)
 
             return {"status": "activated"}
 
@@ -764,7 +786,7 @@ async def whop_webhook(request: Request):
 
     except Exception as e:
         logger.error(f"WHOP WEBHOOK ERROR: {e}")
-        return {"status": "error"}
+        raise HTTPException(status_code=400, detail="Invalid Whop webhook")
 
 # ==================== DOCUMENT ROUTES ====================
 
