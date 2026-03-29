@@ -22,7 +22,6 @@ import {
   LogOut,
   Menu,
   X,
-  Crown,
   Zap,
   Lock,
 } from "lucide-react";
@@ -32,9 +31,9 @@ const navItems = [
   { path: "/dashboard/documents", label: "Documents", icon: FileText, plan: "basic" },
   { path: "/dashboard/chat", label: "AI Chat", icon: MessageSquare, plan: "basic" },
   { path: "/dashboard/bookkeeping", label: "Bookkeeping", icon: Calculator, plan: "premium" },
-  { path: "/dashboard/reports", label: "Reports", icon: BarChart3, plan: "enterprise" },
-  { path: "/dashboard/integrations", label: "Integrations", icon: Link2, plan: "enterprise" },
-  { path: "/dashboard/tax-insights", label: "Tax Insights", icon: Receipt, plan: "enterprise" },
+  { path: "/dashboard/reports", label: "Reports", icon: BarChart3, plan: "premium" },
+  { path: "/dashboard/integrations", label: "Integrations", icon: Link2, plan: "premium" },
+  { path: "/dashboard/tax-insights", label: "Tax Insights", icon: Receipt, plan: "premium" },
   { path: "/dashboard/settings", label: "Settings", icon: Settings, plan: "basic" },
 ];
 
@@ -77,14 +76,10 @@ export default function DashboardLayout() {
   };
 
   const getPlanBadge = (plan) => {
-    switch (plan) {
-      case "enterprise":
-        return <Crown className="h-3 w-3 text-amber-400" />;
-      case "premium":
-        return <Zap className="h-3 w-3 text-primary" />;
-      default:
-        return null;
+    if (String(plan || "").toLowerCase() === "premium") {
+      return <Zap className="h-3 w-3 text-primary" />;
     }
+    return null;
   };
 
   const NavItem = ({ item, mobile = false }) => {
@@ -97,6 +92,7 @@ export default function DashboardLayout() {
         onClick={(e) => {
           if (!hasAccess) {
             e.preventDefault();
+            navigate("/pricing");
           }
           if (mobile) {
             setSidebarOpen(false);
