@@ -119,8 +119,13 @@ export default function DashboardLayout() {
       {/* MOBILE HEADER */}
       <header className="lg:hidden glass-nav sticky top-0 z-50 px-4 py-3 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <FileText className="h-4 w-4 text-white" />
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 flex items-center justify-center">
+            <div className="relative w-4 h-4">
+              <div className="absolute w-1.5 h-1.5 bg-white rounded-full top-0 left-1" />
+              <div className="absolute w-1.5 h-1.5 bg-white rounded-full bottom-0 left-0" />
+              <div className="absolute w-1.5 h-1.5 bg-white rounded-full bottom-0 right-0" />
+              <div className="absolute w-full h-full border border-white/30 rounded-full" />
+            </div>
           </div>
           <span className="font-semibold text-lg font-heading">Simplifile AI</span>
         </Link>
@@ -152,8 +157,13 @@ export default function DashboardLayout() {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-border">
             <Link to="/dashboard" className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-                <FileText className="h-5 w-5 text-white" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 glow-button flex items-center justify-center">
+                <div className="relative w-5 h-5">
+                  <div className="absolute w-2 h-2 bg-white rounded-full top-0 left-1.5" />
+                  <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 left-0" />
+                  <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 right-0" />
+                  <div className="absolute w-full h-full border border-white/30 rounded-full" />
+                </div>
               </div>
               <div>
                 <span className="font-semibold text-lg block">
