@@ -19,14 +19,8 @@ import csv
 
 from supabase import create_client, Client
 
-from ai_service import (
-    analyze_document as ai_analyze_document,
-    chat_with_context,
-    categorize_transaction as ai_categorize_transaction,
-    generate_financial_insights,
-    generate_tax_insights
-)
-
+from openai import OpenAI
+from google import genai
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
@@ -39,6 +33,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
 WHOP_WEBHOOK_KEY = os.environ.get("WHOP_WEBHOOK_KEY", "")
 
