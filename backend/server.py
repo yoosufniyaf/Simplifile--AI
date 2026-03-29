@@ -670,8 +670,9 @@ async def whop_webhook(request: Request):
         headers = dict(request.headers)
 
         webhook_data = whop_client.webhooks.unwrap(
-            request_body_text,
-            {"headers": headers}
+    request_body_text,
+    headers
+)
         )
 
         logger.info(f"Verified Whop webhook: {webhook_data}")
