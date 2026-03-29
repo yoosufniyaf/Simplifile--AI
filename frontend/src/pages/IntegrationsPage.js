@@ -25,24 +25,95 @@ import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const ShopifyLogo = ({ className = "h-7 w-7" }) => (
+  <svg
+    viewBox="0 0 64 64"
+    className={className}
+    aria-label="Shopify logo"
+    role="img"
+  >
+    <defs>
+      <linearGradient id="shopifyBag" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="#95BF47" />
+        <stop offset="100%" stopColor="#5E8E3E" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M18 20.5c.2-1.9 1.7-3.4 3.6-3.7l21.2-2.9c2.3-.3 4.3 1.3 4.6 3.6l3.1 29.2c.2 1.7-.9 3.3-2.6 3.7L22.8 58c-2 .5-4-1-4.2-3.1L16 24.1c-.1-1.2.8-2.3 2-2.5Z"
+      fill="url(#shopifyBag)"
+    />
+    <path
+      d="M41.5 22.5c-.1-2.5-.7-4.5-1.9-5.8-1-1.1-2.4-1.7-4-1.7h-.2c-.4-.6-1-1.1-1.7-1.4-2.7-1.2-6.4.8-8.8 4.8-1.7 2.8-2.9 6.3-3.2 9.1l-4 1.2.8 4.1 3.1-.9v.4c-.1 2.9.7 5.2 2.3 6.6 1.4 1.3 3.6 2 6.3 2 5.1 0 8.5-2.9 8.9-7.4.3-3.2-1.3-5.2-4.9-6.9-2.7-1.2-3.3-1.7-3.2-2.7.1-.8.9-1.7 2.7-1.7 1.5 0 2.8.4 3.8.8l1.5-4.5c-.8-.4-1.9-.8-3.3-1 .5-.9 1-1.8 1.6-2.5 1.2-1.6 2.4-2.4 3.2-2.5.4 0 .7.1 1 .3.7.7 1 2.8.9 4.7l4.1-1.3Zm-12.4-3.8c.9-1.5 2.1-2.7 3.1-3.1-.6.9-1.2 2.2-1.7 3.8l-4.2 1.3c.6-.7 1.8-1.4 2.8-2Zm-1.7 17.4c-1 0-1.9-.2-2.5-.7-.8-.7-1.2-1.9-1.2-3.5 0-.2 0-.4 0-.7l5.6-1.7c2 .9 2.9 1.7 2.8 2.9-.2 1.9-1.8 3.7-4.7 3.7Z"
+      fill="#FFFFFF"
+      opacity="0.95"
+    />
+    <path
+      d="M29 12.7c1.4-2 3.1-3.2 4.8-3.7.9-.2 1.8-.2 2.5.1 1 .4 1.8 1.1 2.3 2.1"
+      fill="none"
+      stroke="#2F4F1E"
+      strokeWidth="2"
+      strokeLinecap="round"
+      opacity="0.35"
+    />
+  </svg>
+);
+
+const PayPalLogo = ({ className = "h-7 w-7" }) => (
+  <svg
+    viewBox="0 0 64 64"
+    className={className}
+    aria-label="PayPal logo"
+    role="img"
+  >
+    <path
+      d="M23 10h15.3c7.8 0 12.4 4.5 11.1 11.5-1.5 8.3-7.2 12-14.3 12H29l-2.4 15H16L23 10Z"
+      fill="#003087"
+    />
+    <path
+      d="M28.2 16h12.4c5.9 0 9.4 3.4 8.4 8.8-1.2 6.4-5.6 9.2-11.7 9.2h-5.2l-1.8 11.3H21L28.2 16Z"
+      fill="#0070E0"
+    />
+    <path
+      d="M25.5 23h8.7c3.6 0 5.7 1.9 5.1 5-0.7 3.8-3.2 5.6-7 5.6h-3.6l-1.2 7.4h-6.4L25.5 23Z"
+      fill="#001C64"
+      opacity="0.92"
+    />
+  </svg>
+);
+
+const WhopLogo = ({ className = "h-7 w-7" }) => (
+  <svg
+    viewBox="0 0 64 64"
+    className={className}
+    aria-label="Whop logo"
+    role="img"
+  >
+    <rect x="6" y="6" width="52" height="52" rx="14" fill="#111111" />
+    <path
+      d="M17 22h7.2l3.4 13.2L31.6 22h6.2l4 13.2L45 22h7l-7.2 20h-5.9l-4.1-13.1L30.7 42h-5.9L17 22Z"
+      fill="#FFFFFF"
+    />
+  </svg>
+);
+
 const PLATFORM_INFO = {
   shopify: {
     name: "Shopify",
     description: "Import orders, revenue, refunds, and fees",
-    icon: "🛍️",
-    color: "bg-green-500/20 text-green-400 border-green-500/30",
+    logo: ShopifyLogo,
+    logoWrapClass: "bg-[#95BF47]/15 border border-[#95BF47]/30",
   },
   paypal: {
     name: "PayPal",
     description: "Import transactions and fees",
-    icon: "🅿️",
-    color: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    logo: PayPalLogo,
+    logoWrapClass: "bg-[#0070E0]/15 border border-[#0070E0]/30",
   },
   whop: {
     name: "Whop",
     description: "Connect your Whop store for revenue tracking",
-    icon: "⚡",
-    color: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    logo: WhopLogo,
+    logoWrapClass: "bg-white/5 border border-white/10",
   },
 };
 
@@ -232,6 +303,7 @@ const IntegrationsPage = () => {
         {integrations.map((integration) => {
           const info = PLATFORM_INFO[integration.platform];
           const isConnected = integration.status === "connected";
+          const Logo = info.logo;
 
           return (
             <Card
@@ -242,8 +314,10 @@ const IntegrationsPage = () => {
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center text-2xl ${info.color}`}>
-                      {info.icon}
+                    <div
+                      className={`h-12 w-12 rounded-xl flex items-center justify-center ${info.logoWrapClass}`}
+                    >
+                      <Logo className="h-7 w-7" />
                     </div>
                     <div>
                       <CardTitle className="text-lg" style={{ fontFamily: "Outfit, sans-serif" }}>
