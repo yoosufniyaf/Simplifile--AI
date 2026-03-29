@@ -19,28 +19,27 @@ import TaxInsightsPage from "./pages/TaxInsightsPage";
 import SettingsPage from "./pages/SettingsPage";
 import PricingPage from "./pages/PricingPage";
 
+const LoadingScreen = () => {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
+};
+
 const ProtectedRoute = ({ children }) => {
   const { user, loading, token } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  // If token exists but user is still syncing, don't kick them out yet.
   if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (
@@ -48,6 +47,35 @@ const ProtectedRoute = ({ children }) => {
     user.subscription_status !== "active"
   ) {
     return <Navigate to="/pricing" replace />;
+  }
+
+  return children;
+};
+
+const PlanProtectedRoute = ({ children, requiredPlan = "basic" }) => {
+  const { user, loading, token, checkPlanAccess } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user) {
+    return <LoadingScreen />;
+  }
+
+  if (
+    user.subscription_status !== "trial" &&
+    user.subscription_status !== "active"
+  ) {
+    return <Navigate to="/pricing" replace />;
+  }
+
+  if (!checkPlanAccess(requiredPlan)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -77,10 +105,43 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="chat" element={<ChatPage />} />
-            <Route path="bookkeeping" element={<BookkeepingPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="integrations" element={<IntegrationsPage />} />
-            <Route path="tax-insights" element={<TaxInsightsPage />} />
+
+            <Route
+              path="bookkeeping"
+              element={
+                <PlanProtectedRoute requiredPlan="premium">
+                  <BookkeepingPage />
+                </PlanProtectedRoute>
+              }
+            />
+
+            <Route
+              path="reports"
+              element={
+                <PlanProtectedRoute requiredPlan="premium">
+                  <ReportsPage />
+                </PlanProtectedRoute>
+              }
+            />
+
+            <Route
+              path="integrations"
+              element={
+                <PlanProtectedRoute requiredPlan="premium">
+                  <IntegrationsPage />
+                </PlanProtectedRoute>
+              }
+            />
+
+            <Route
+              path="tax-insights"
+              element={
+                <PlanProtectedRoute requiredPlan="premium">
+                  <TaxInsightsPage />
+                </PlanProtectedRoute>
+              }
+            />
+
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 
