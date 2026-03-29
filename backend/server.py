@@ -18,9 +18,9 @@ import io
 import csv
 
 from supabase import create_client, Client
-
 from openai import OpenAI
 from google import genai
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
@@ -36,6 +36,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
 WHOP_WEBHOOK_KEY = os.environ.get("WHOP_WEBHOOK_KEY", "")
+
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -51,14 +52,7 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "simplifile-ai-secret-key-2024")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 TRIAL_DAYS = 3
-from openai import OpenAI
-from google import genai
 
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-
-OPENAI_MODEL = "gpt-4o-mini"
-GEMINI_MODEL = "gemini-2.5-flash"
 app = FastAPI(title="Simplifile AI API")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
@@ -68,6 +62,73 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# ==================== AI FUNCTIONS ====================
+
+async def ai_analyze_document(text, filename):
+    response = openai_client.responses.create(
+        model=OPENAI_MODEL,
+        input=(
+            "Analyze this document and explain it clearly.\n\n"
+            f"Filename: {filename}\n\n"
+            f"Document:\n{text[:8000]}"
+        )
+    )
+    output = response.output_text or ""
+
+    return {
+        "summary": output,
+        "key_points": [],
+        "risks": [],
+        "obligations": [],
+        "simple_explanation": output,
+        "what_this_means": output
+    }
+
+async def chat_with_context(message, context=None, document_name=None):
+    response = openai_client.responses.create(
+        model=OPENAI_MODEL,
+        input=(
+            f"User message:\n{message}\n\n"
+            f"Document name:\n{document_name or 'None'}\n\n"
+            f"Context:\n{context or 'None'}"
+        )
+    )
+    return response.output_text or ""
+
+async def ai_categorize_transaction(description):
+    response = gemini_client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=f"Categorize this transaction into a simple business category and return only the category name:\n{description}"
+    )
+    return (response.text or "other").strip().lower()
+
+async def generate_financial_insights(transactions):
+    response = gemini_client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=f"Give short and useful financial insights for these transactions:\n{transactions}"
+    )
+    return response.text or "AI financial analysis is temporarily unavailable."
+
+async def generate_tax_insights(transactions, total_expenses):
+    response = gemini_client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=(
+            "Give tax insights for this business data.\n\n"
+            f"Transactions:\n{transactions}\n\n"
+            f"Total expenses: {total_expenses}"
+        )
+    )
+    text = response.text or "AI tax analysis is temporarily unavailable."
+
+    return {
+        "deductions": [],
+        "estimated_taxes": {},
+        "planning_insights": [text],
+        "structure_advice": [],
+        "ai_analysis": text,
+        "total_deductible": total_expenses
+    }
 
 # ==================== MODELS ====================
 
@@ -677,9 +738,9 @@ async def whop_webhook(request: Request):
         headers = dict(request.headers)
 
         webhook_data = whop_client.webhooks.unwrap(
-    request_body_text,
-    headers
-)
+            request_body_text,
+            headers
+        )
         logger.info(f"Verified Whop webhook: {webhook_data}")
 
         event_type = str(webhook_data.get("type") or "")
