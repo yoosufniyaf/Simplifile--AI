@@ -193,11 +193,10 @@ export const AuthProvider = ({ children }) => {
     const planHierarchy = {
       basic: 1,
       premium: 2,
-      enterprise: 3,
     };
 
-    const userPlan = (user?.plan || "basic").toLowerCase();
-    const required = requiredPlan.toLowerCase();
+    const userPlan = String(user?.plan || "basic").toLowerCase();
+    const required = String(requiredPlan || "basic").toLowerCase();
 
     return (planHierarchy[userPlan] || 0) >= (planHierarchy[required] || 0);
   };
