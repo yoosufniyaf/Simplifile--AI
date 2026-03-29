@@ -1,3 +1,4 @@
+from whop_sdk import Whop
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -38,7 +39,10 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
+WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
+WHOP_WEBHOOK_KEY = os.environ.get("WHOP_WEBHOOK_KEY", "")
 
+whop_client = Whop(api_key=WHOP_API_KEY)
 JWT_SECRET = os.environ.get("JWT_SECRET", "simplifile-ai-secret-key-2024")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
@@ -656,116 +660,111 @@ async def get_plans():
 
 @api_router.post("/webhook/whop")
 async def whop_webhook(request: Request):
-    payload = await request.json()
-    logger.info(f"Whop webhook received: {payload}")
+    try:
+        raw_body = await request.body()
+        headers = dict(request.headers)
 
-    event_type = payload.get("type") or payload.get("event") or payload.get("event_type")
-    data = payload.get("data") or payload.get("payload") or payload
+        # 🔐 VERIFY WEBHOOK (IMPORTANT)
+        event = whop_client.webhooks.unwrap(
+            raw_body,
+            headers,
+            WHOP_WEBHOOK_KEY
+        )
 
-    customer_email = normalize_email(
-        data.get("customer_email")
-        or data.get("email")
-        or data.get("user_email")
-        or data.get("buyer_email")
-        or data.get("member_email")
-        or (data.get("user") or {}).get("email")
-        or (data.get("customer") or {}).get("email")
-        or (data.get("member") or {}).get("email")
-    )
+        logger.info(f"Verified Whop webhook: {event}")
 
-    plan_hint = (
-        data.get("plan")
-        or data.get("plan_id")
-        or data.get("product")
-        or data.get("product_id")
-        or data.get("offer_title")
-        or data.get("product_name")
-        or json.dumps(data)
-    )
+        event_type = event.get("type")
+        data = event.get("data", {})
 
-    billing_cycle = infer_billing_from_text(
-        data.get("billing_cycle"),
-        data.get("interval"),
-        data.get("renewal_period"),
-        plan_hint
-    )
+        # 🔍 GET EMAIL
+        customer_email = normalize_email(
+            data.get("customer_email")
+            or data.get("email")
+            or data.get("user_email")
+            or data.get("buyer_email")
+            or data.get("member_email")
+            or (data.get("user") or {}).get("email")
+            or (data.get("customer") or {}).get("email")
+            or (data.get("member") or {}).get("email")
+        )
 
-    if not customer_email:
-        return {"status": "ignored", "reason": "no email found", "event_type": event_type}
+        if not customer_email:
+            return {"status": "ignored", "reason": "no email"}
 
-    user = table_select_one("users", {"email": customer_email})
-    if not user:
-        return {
-            "status": "ignored",
-            "reason": "user not found",
-            "email": customer_email,
-            "event_type": event_type
-        }
+        user = table_select_one("users", {"email": customer_email})
+        if not user:
+            return {"status": "ignored", "reason": "user not found"}
 
-    event_text = f"{event_type} {json.dumps(data)}".lower()
+        # 🧠 DETECT EVENT TYPE
+        event_text = f"{event_type} {json.dumps(data)}".lower()
 
-    cancelled_keywords = [
-        "cancel", "cancelled", "canceled", "refund", "refunded",
-        "chargeback", "dispute", "revoked", "expired"
-    ]
-    paid_keywords = [
-        "payment", "purchase", "checkout", "subscription", "membership",
-        "order", "paid", "succeeded", "active", "created", "invoice_paid"
-    ]
+        cancelled_keywords = [
+            "cancel", "cancelled", "canceled", "refund",
+            "refunded", "chargeback", "dispute", "revoked", "expired"
+        ]
 
-    inferred_plan = infer_plan_from_text(plan_hint, event_text) or user.get("plan", "basic")
+        paid_keywords = [
+            "payment", "purchase", "checkout",
+            "subscription", "membership", "paid", "succeeded"
+        ]
 
-    if any(word in event_text for word in cancelled_keywords):
-        table_update(
-            "users",
-            {"id": user["id"]},
-            {
-                "subscription_status": "inactive",
-                "trial_started": False,
-                "trial_ends_at": None
+        plan_hint = json.dumps(data)
+        inferred_plan = infer_plan_from_text(plan_hint) or user.get("plan", "basic")
+        billing_cycle = infer_billing_from_text(plan_hint)
+
+        # ❌ CANCEL / REFUND
+        if any(word in event_text for word in cancelled_keywords):
+            table_update(
+                "users",
+                {"id": user["id"]},
+                {
+                    "subscription_status": "inactive",
+                    "trial_started": False,
+                    "trial_ends_at": None
+                }
+            )
+
+            return {"status": "deactivated"}
+
+        # ✅ PAYMENT SUCCESS
+        if any(word in event_text for word in paid_keywords):
+            payment_id = data.get("id")
+
+            table_update(
+                "users",
+                {"id": user["id"]},
+                {
+                    "plan": inferred_plan,
+                    "billing_cycle": billing_cycle,
+                    "subscription_status": "active",
+                    "trial_started": False,
+                    "trial_ends_at": None,
+                    "last_payment_id": payment_id
+                }
+            )
+
+            # 💰 SAVE TRANSACTION
+            transaction = {
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "description": "Whop Payment",
+                "amount": float(data.get("amount", 0)) / 100 if data.get("amount") else 0,
+                "category": "income",
+                "date": now_iso()[:10],
+                "type": "income",
+                "source": "whop",
+                "created_at": now_iso()
             }
-        )
-        return {
-            "status": "ok",
-            "action": "deactivated",
-            "email": customer_email,
-            "event_type": event_type
-        }
 
-    if event_type == "invoice_paid" or any(word in event_text for word in paid_keywords):
-        payment_id = (
-            data.get("payment_id")
-            or data.get("invoice_id")
-            or data.get("id")
-        )
+            table_insert_one("transactions", transaction)
 
-        table_update(
-            "users",
-            {"id": user["id"]},
-            {
-                "plan": inferred_plan,
-                "billing_cycle": billing_cycle,
-                "subscription_status": "active",
-                "trial_started": False,
-                "trial_ends_at": None,
-                "last_payment_id": payment_id
-            }
-        )
-        return {
-            "status": "ok",
-            "action": "activated",
-            "email": customer_email,
-            "plan": inferred_plan,
-            "billing_cycle": billing_cycle,
-            "event_type": event_type
-        }
+            return {"status": "activated"}
 
-    return {
-        "status": "ignored",
-        "reason": "event not handled",
-        "email": customer_email,
-        "event_type": event_type
-    }
+        return {"status": "ignored"}
+
+    except Exception as e:
+        logger.error(f"WHOP WEBHOOK ERROR: {e}")
+        return {"status": "error"}
 
 # ==================== DOCUMENT ROUTES ====================
 
