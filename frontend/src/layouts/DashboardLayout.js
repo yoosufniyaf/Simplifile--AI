@@ -122,7 +122,7 @@ export default function DashboardLayout() {
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
             <FileText className="h-4 w-4 text-white" />
           </div>
-          <span className="font-semibold text-lg font-heading">Simplifile</span>
+          <span className="font-semibold text-lg font-heading">Simplifile AI</span>
         </Link>
 
         <Button
@@ -157,7 +157,7 @@ export default function DashboardLayout() {
               </div>
               <div>
                 <span className="font-semibold text-lg block">
-                  Simplifile
+                  Simplifile AI
                 </span>
                 <span className="text-xs text-muted-foreground">AI CFO Platform</span>
               </div>
@@ -228,8 +228,6 @@ export default function DashboardLayout() {
 
       {/* MAIN CONTENT */}
       <main className="lg:ml-64 min-h-screen">
-
-        {/* ✅ AI DISCLAIMER */}
         <div className="px-6 pt-4">
           <div className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-2">
             ⚠️ Simplifile AI may make mistakes. Always verify important information.
