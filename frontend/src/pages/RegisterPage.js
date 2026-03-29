@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { FileText, Mail, Lock, User, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 const RegisterPage = () => {
@@ -14,6 +14,10 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const plan = searchParams.get("plan");
+  const billing = searchParams.get("billing");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,8 +34,18 @@ const RegisterPage = () => {
       toast.success("Account created successfully!");
 
       if (data?.session) {
+        if (plan && billing) {
+          navigate(`/pricing?plan=${plan}&billing=${billing}`);
+          return;
+        }
+
         navigate("/dashboard");
       } else {
+        if (plan && billing) {
+          navigate(`/login?plan=${plan}&billing=${billing}`);
+          return;
+        }
+
         navigate("/login");
       }
     } catch (error) {
@@ -53,10 +67,12 @@ const RegisterPage = () => {
         </Link>
 
         <div className="max-w-md w-full mx-auto lg:mx-0">
-          <Link to="/" className="flex items-center gap-2 mb-8">
-            <div className="h-10 w-10 rounded-xl bg-primary glow-button flex items-center justify-center">
-              <FileText className="h-5 w-5 text-white" />
-            </div>
+          <Link to="/" className="flex items-center gap-3 mb-8">
+            <img
+              src="/logo.png"
+              alt="Simplifile AI logo"
+              className="h-11 w-11 rounded-xl object-contain"
+            />
             <span
               className="font-semibold text-xl"
               style={{ fontFamily: "Outfit, sans-serif" }}
