@@ -12,13 +12,8 @@ import {
   DialogFooter,
 } from "../components/ui/dialog";
 import {
-  Link2,
   Lock,
   Loader2,
-  Check,
-  X,
-  RefreshCw,
-  Zap,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -105,8 +100,27 @@ const IntegrationsPage = () => {
     setConnecting(false);
   };
 
+  const handleShopifyConnect = () => {
+    const shop = window.prompt("Enter your Shopify store URL (example: mystore.myshopify.com)");
+    if (!shop) return;
+
+    const cleanedShop = shop.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+    if (!cleanedShop.includes(".myshopify.com")) {
+      toast.error("Enter a valid Shopify store URL like mystore.myshopify.com");
+      return;
+    }
+
+    window.location.href = `${API}/integrations/shopify/connect?shop=${encodeURIComponent(cleanedShop)}`;
+  };
+
   const handleConnect = async () => {
     if (!selectedPlatform) return;
+
+    if (selectedPlatform === "shopify") {
+      handleShopifyConnect();
+      return;
+    }
 
     setConnecting(true);
 
@@ -160,6 +174,11 @@ const IntegrationsPage = () => {
   };
 
   const openConnectDialog = (platform) => {
+    if (platform === "shopify") {
+      handleShopifyConnect();
+      return;
+    }
+
     setSelectedPlatform(platform);
     setConnectDialogOpen(true);
   };
@@ -193,20 +212,30 @@ const IntegrationsPage = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Integrations</h1>
+      <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+        <div>
+          <h1 className="text-3xl font-bold">Integrations</h1>
+          <p className="text-muted-foreground mt-1">
+            Connect your stores and payment platforms to sync business transactions automatically.
+          </p>
+        </div>
+
+        <Badge className="text-sm px-3 py-1">
+          {connectedCount}/{integrations.length} connected
+        </Badge>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {integrations.map((integration) => {
           const info = PLATFORM_INFO[integration.platform];
           const isConnected = integration.status === "connected";
+          const isSyncing = syncing === integration.platform;
 
           return (
             <Card key={integration.platform}>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    
-                    {/* ✅ LOGO FIX */}
                     <div className={`h-14 w-14 rounded-xl flex items-center justify-center border ${info.color}`}>
                       <img
                         src={info.logo}
@@ -221,23 +250,76 @@ const IntegrationsPage = () => {
                     </div>
                   </div>
 
-                  <Badge>
+                  <Badge variant={isConnected ? "default" : "secondary"}>
                     {isConnected ? "Connected" : "Not Connected"}
                   </Badge>
                 </div>
               </CardHeader>
 
-              <CardContent>
-                {!isConnected && (
+              <CardContent className="flex flex-wrap gap-3">
+                {!isConnected ? (
                   <Button onClick={() => openConnectDialog(integration.platform)}>
                     Connect {info.name}
                   </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleSync(integration.platform)}
+                      disabled={isSyncing}
+                    >
+                      {isSyncing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        "Sync Now"
+                      )}
+                    </Button>
+
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDisconnect(integration.platform)}
+                    >
+                      Disconnect
+                    </Button>
+                  </>
                 )}
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Connect {selectedPlatform ? PLATFORM_INFO[selectedPlatform]?.name : "Integration"}
+            </DialogTitle>
+            <DialogDescription>
+              This will connect your account so Simplifile AI can track transactions and sync relevant financial data.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeConnectDialog}>
+              Cancel
+            </Button>
+            <Button onClick={handleConnect} disabled={connecting}>
+              {connecting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                "Connect"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
