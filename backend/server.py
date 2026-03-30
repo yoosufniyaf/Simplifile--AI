@@ -1,3 +1,6 @@
+import os
+import requests
+from fastapi.responses import RedirectResponse
 from whop_sdk import Whop
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
