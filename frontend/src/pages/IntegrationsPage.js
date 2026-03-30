@@ -23,43 +23,32 @@ import {
 import axios from "axios";
 import { toast } from "sonner";
 
+import shopifyLogo from "../assets/logos/shopify.png";
+import paypalLogo from "../assets/logos/paypal.png";
+import whopLogo from "../assets/logos/whop.png";
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const PLATFORM_INFO = {
   shopify: {
     name: "Shopify",
     description: "Import orders, revenue, refunds, and fees",
-    icon: (
-      <img
-        src="/logos/shopify.png"
-        alt="Shopify"
-        className="h-8 w-8 object-contain"
-      />
-    ),
+    logo: shopifyLogo,
+    logoAlt: "Shopify",
     color: "bg-green-500/10 border-green-500/20",
   },
   paypal: {
     name: "PayPal",
     description: "Import transactions and fees",
-    icon: (
-      <img
-        src="/logos/paypal.png"
-        alt="PayPal"
-        className="h-8 w-8 object-contain"
-      />
-    ),
+    logo: paypalLogo,
+    logoAlt: "PayPal",
     color: "bg-blue-500/10 border-blue-500/20",
   },
   whop: {
     name: "Whop",
     description: "Connect your Whop store for revenue tracking",
-    icon: (
-      <img
-        src="/logos/whop.png"
-        alt="Whop"
-        className="h-8 w-8 object-contain"
-      />
-    ),
+    logo: whopLogo,
+    logoAlt: "Whop",
     color: "bg-orange-500/10 border-orange-500/20",
   },
 };
@@ -260,9 +249,17 @@ const IntegrationsPage = () => {
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${info.color}`}>
-                      {info.icon}
+                    <div
+                      className={`h-14 w-14 rounded-xl flex items-center justify-center overflow-hidden border ${info.color}`}
+                    >
+                      <img
+                        src={info.logo}
+                        alt={info.logoAlt}
+                        className="h-9 w-9 object-contain"
+                        draggable="false"
+                      />
                     </div>
+
                     <div>
                       <CardTitle className="text-lg" style={{ fontFamily: "Outfit, sans-serif" }}>
                         {info.name}
