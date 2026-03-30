@@ -1862,7 +1862,14 @@ def connect_shopify(shop: str, token: str):
 
 
 @api_router.get("/integrations/shopify/callback")
-def shopify_callback(code: str, shop: str):
+def shopify_callback(code: str, shop: str, state: str):
+    # state = user JWT token
+    try:
+        payload = jwt.decode(state, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     token_url = f"https://{shop}/admin/oauth/access_token"
 
     response = requests.post(
@@ -1877,11 +1884,41 @@ def shopify_callback(code: str, shop: str):
     data = response.json()
     access_token = data.get("access_token")
 
-    return {
-        "shop": shop,
-        "connected": bool(access_token),
-        "access_token": access_token,
-    }
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Failed to get Shopify token")
+
+    # ✅ SAVE TO DATABASE
+    existing = table_select_one("integrations", {
+        "user_id": user_id,
+        "platform": "shopify"
+    })
+
+    if existing:
+        table_update(
+            "integrations",
+            {"id": existing["id"]},
+            {
+                "status": "connected",
+                "connected_at": now_iso(),
+                "shop": shop,
+                "access_token": access_token,
+            }
+        )
+    else:
+        table_insert_one(
+            "integrations",
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "platform": "shopify",
+                "status": "connected",
+                "connected_at": now_iso(),
+                "shop": shop,
+                "access_token": access_token,
+            }
+        )
+
+    return RedirectResponse("https://simplifile-ai.vercel.app/integrations")
 
 # ==================== REGISTER ROUTER ====================
 
