@@ -1851,6 +1851,27 @@ SHOPIFY_REDIRECT_URI = os.getenv("SHOPIFY_REDIRECT_URI")
 
 @api_router.get("/integrations/shopify/connect")
 def connect_shopify(shop: str):
+@api_router.get("/integrations/shopify/callback")
+def shopify_callback(code: str, shop: str):
+    token_url = f"https://{shop}/admin/oauth/access_token"
+
+    response = requests.post(
+        token_url,
+        json={
+            "client_id": SHOPIFY_CLIENT_ID,
+            "client_secret": SHOPIFY_CLIENT_SECRET,
+            "code": code,
+        },
+    )
+
+    data = response.json()
+    access_token = data.get("access_token")
+
+    return {
+        "shop": shop,
+        "connected": bool(access_token),
+        "access_token": access_token,
+    }
     auth_url = (
         f"https://{shop}/admin/oauth/authorize"
         f"?client_id={SHOPIFY_CLIENT_ID}"
