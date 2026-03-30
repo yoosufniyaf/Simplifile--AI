@@ -1841,17 +1841,8 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": now_iso()}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-@api_router.get("/health")
-async def health_check():
-    return {"status": "healthy", "timestamp": now_iso()}
 
+# ==================== SHOPIFY INTEGRATION ====================
 
 SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID")
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET")
@@ -1869,4 +1860,14 @@ def connect_shopify(shop: str):
     return RedirectResponse(auth_url)
 
 
+# ==================== REGISTER ROUTER ====================
+
 app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
