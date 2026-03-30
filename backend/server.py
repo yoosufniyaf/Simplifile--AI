@@ -1080,13 +1080,15 @@ async def whop_webhook(request: Request):
             table_update(
                 "users",
                 {"id": user["id"]},
-                {
+                                {
                     "plan": inferred_plan,
                     "billing_cycle": billing_cycle,
                     "subscription_status": "active",
                     "trial_started": False,
                     "trial_ends_at": None,
-                    "last_payment_id": payment_id
+                    "last_payment_id": payment_id,
+                    "whop_membership_id": (data.get("membership") or {}).get("id"),
+                    "whop_manage_url": (data.get("membership") or {}).get("manage_url")
                 }
             )
 
