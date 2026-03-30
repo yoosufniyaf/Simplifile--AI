@@ -1063,7 +1063,7 @@ async def whop_webhook(request: Request):
         if not user:
             return {"status": "ignored", "reason": "user not found"}
 
-                plan_hint = json.dumps(data)
+        plan_hint = json.dumps(data)
         inferred_plan = infer_plan_from_text(plan_hint) or user.get("plan", "basic")
         billing_cycle = infer_billing_from_text(plan_hint)
 
