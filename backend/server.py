@@ -452,6 +452,8 @@ class UserResponse(BaseModel):
     trial_ends_at: Optional[str] = None
     subscription_status: str
     created_at: str
+    whop_manage_url: Optional[str] = None
+    whop_membership_id: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -711,7 +713,9 @@ def to_user_response(user: dict) -> UserResponse:
         trial_started=bool(user.get("trial_started", False)),
         trial_ends_at=user.get("trial_ends_at"),
         subscription_status=user.get("subscription_status", "inactive"),
-        created_at=user["created_at"]
+        created_at=user["created_at"],
+        whop_manage_url=user.get("whop_manage_url"),
+        whop_membership_id=user.get("whop_membership_id")
     )
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
