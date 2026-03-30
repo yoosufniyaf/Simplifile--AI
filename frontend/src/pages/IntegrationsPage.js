@@ -29,20 +29,38 @@ const PLATFORM_INFO = {
   shopify: {
     name: "Shopify",
     description: "Import orders, revenue, refunds, and fees",
-    icon: "🛍️",
-    color: "bg-green-500/20 text-green-400 border-green-500/30",
+    icon: (
+      <img
+        src="/logos/shopify.png"
+        alt="Shopify"
+        className="h-8 w-8 object-contain"
+      />
+    ),
+    color: "bg-green-500/10 border-green-500/20",
   },
   paypal: {
     name: "PayPal",
     description: "Import transactions and fees",
-    icon: "🅿️",
-    color: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    icon: (
+      <img
+        src="/logos/paypal.png"
+        alt="PayPal"
+        className="h-8 w-8 object-contain"
+      />
+    ),
+    color: "bg-blue-500/10 border-blue-500/20",
   },
   whop: {
     name: "Whop",
     description: "Connect your Whop store for revenue tracking",
-    icon: "⚡",
-    color: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    icon: (
+      <img
+        src="/logos/whop.png"
+        alt="Whop"
+        className="h-8 w-8 object-contain"
+      />
+    ),
+    color: "bg-orange-500/10 border-orange-500/20",
   },
 };
 
@@ -242,7 +260,7 @@ const IntegrationsPage = () => {
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center text-2xl ${info.color}`}>
+                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${info.color}`}>
                       {info.icon}
                     </div>
                     <div>
