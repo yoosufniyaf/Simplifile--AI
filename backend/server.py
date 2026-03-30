@@ -1166,7 +1166,6 @@ async def upload_document(
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
-    require_feature_access(user)
 
     content = await file.read()
     content_base64 = base64.b64encode(content).decode("utf-8")
@@ -1686,7 +1685,7 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
 
     return {"message": f"{platform} disconnected"}
 
-    @api_router.post("/integrations/{platform}/sync")
+@api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
