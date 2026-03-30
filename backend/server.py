@@ -1074,18 +1074,19 @@ async def whop_webhook(request: Request):
                 or data.get("id")
             )
 
-            amount_value = data.get("amount")
+                        amount_value = data.get("amount")
             amount = 0.0
             try:
                 amount = float(amount_value) / 100 if amount_value is not None else 0.0
             except Exception:
                 amount = 0.0
-                membership = data.get("membership") or data.get("member") or {}
+
+            membership = data.get("membership") or data.get("member") or {}
 
             table_update(
                 "users",
                 {"id": user["id"]},
-                                {
+                {
                     "plan": inferred_plan,
                     "billing_cycle": billing_cycle,
                     "subscription_status": "active",
@@ -1096,7 +1097,6 @@ async def whop_webhook(request: Request):
                     "whop_manage_url": membership.get("manage_url") or membership.get("manageUrl")
                 }
             )
-
             existing_transaction = None
             if payment_id:
                 existing_rows = table_select(
