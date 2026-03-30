@@ -1698,62 +1698,58 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Integration not connected")
 
     if platform == "shopify":
-    access_token = integration.get("access_token")
-    shop = integration.get("shop")
+        access_token = integration.get("access_token")
+        shop = integration.get("shop")
 
-    if not access_token or not shop:
-        raise HTTPException(status_code=400, detail="Shopify not properly connected")
+        if not access_token or not shop:
+            raise HTTPException(status_code=400, detail="Shopify not properly connected")
 
-    response = requests.get(
-        f"https://{shop}/admin/api/2023-10/orders.json",
-        headers={
-            "X-Shopify-Access-Token": access_token,
-            "Content-Type": "application/json",
-        },
-        params={"status": "any", "limit": 50},
-    )
-
-    orders = response.json().get("orders", [])
-    transactions = []
-
-    for order in orders:
-        order_id = str(order.get("id"))
-
-        # 🔥 CHECK DUPLICATE
-        existing = table_select_one(
-            "transactions",
-            {"user_id": user["id"], "external_id": order_id}
+        response = requests.get(
+            f"https://{shop}/admin/api/2023-10/orders.json",
+            headers={
+                "X-Shopify-Access-Token": access_token,
+                "Content-Type": "application/json",
+            },
+            params={"status": "any", "limit": 50},
         )
 
-        if existing:
-            continue
+        orders = response.json().get("orders", [])
+        transactions = []
 
-        total_price = float(order.get("total_price", 0))
+        for order in orders:
+            order_id = str(order.get("id"))
 
-        transactions.append({
-            "id": str(uuid.uuid4()),
-            "user_id": user["id"],
-            "external_id": order_id,
-            "description": f"Shopify Order #{order_id}",
-            "amount": total_price,
-            "category": "sales",
-            "date": order.get("created_at", now_iso())[:10],
-            "type": "income",
-            "source": "shopify",
-            "created_at": now_iso()
-        })
+            existing = table_select_one(
+                "transactions",
+                {"user_id": user["id"], "external_id": order_id}
+            )
 
-    table_insert_many("transactions", transactions)
+            if existing:
+                continue
 
-    return {
-        "message": f"Imported {len(transactions)} new Shopify orders",
-        "count": len(transactions)
-    }
-    }
-    ]
+            total_price = float(order.get("total_price", 0))
 
-    table_insert_many("transactions", mock_transactions)
-    return {"message": f"Synced {len(mock_transactions)} transactions from {platform}"}
+            transactions.append({
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "external_id": order_id,
+                "description": f"Shopify Order #{order_id}",
+                "amount": total_price,
+                "category": "sales",
+                "date": order.get("created_at", now_iso())[:10],
+                "type": "income",
+                "source": "shopify",
+                "created_at": now_iso()
+            })
+
+        table_insert_many("transactions", transactions)
+
+        return {
+            "message": f"Imported {len(transactions)} new Shopify orders",
+            "count": len(transactions)
+        }
+
+    raise HTTPException(status_code=400, detail=f"Sync not supported yet for {platform}")
 
 # ==================== TAX INSIGHTS ROUTES (PREMIUM) ====================
 
