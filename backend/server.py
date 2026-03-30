@@ -1854,6 +1854,20 @@ def connect_shopify(shop: str):
         f"&redirect_uri={SHOPIFY_REDIRECT_URI}"
     )
     return RedirectResponse(auth_url)
+    SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID")
+SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET")
+SHOPIFY_REDIRECT_URI = os.getenv("SHOPIFY_REDIRECT_URI")
+
+
+@api_router.get("/integrations/shopify/connect")
+def connect_shopify(shop: str):
+    auth_url = (
+        f"https://{shop}/admin/oauth/authorize"
+        f"?client_id={SHOPIFY_CLIENT_ID}"
+        f"&scope=read_orders,read_products,read_customers"
+        f"&redirect_uri={SHOPIFY_REDIRECT_URI}"
+    )
+    return RedirectResponse(auth_url)
 
 app.include_router(api_router)
 
