@@ -113,7 +113,7 @@ const SettingsPage = () => {
                       "Transaction Categorization",
                       "P&L, Monthly Summary",
                       "MRR, Burn Rate, CAC Insights",
-                      "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
+                      "Auto Integrations (Shopify, PayPal, Whop)",
                       "Financial Statements Auto-Generated",
                       "Manual Editing & Custom Entries",
                       "PDF/CSV Export",
@@ -242,6 +242,15 @@ const SettingsPage = () => {
     } finally {
       setDeletingAccount(false);
     }
+  };
+
+  const handleManageSubscription = () => {
+    if (!user?.whop_manage_url) {
+      toast.error("No active subscription found yet.");
+      return;
+    }
+
+    window.location.href = user.whop_manage_url;
   };
 
   return (
@@ -409,9 +418,7 @@ const SettingsPage = () => {
           <div className="flex justify-center">
             <Button
               variant="outline"
-              onClick={() => {
-                window.open("https://whop.com/user/orders", "_blank");
-              }}
+              onClick={handleManageSubscription}
             >
               Cancel or Manage Subscription
             </Button>
