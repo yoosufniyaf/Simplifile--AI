@@ -111,7 +111,12 @@ const IntegrationsPage = () => {
       return;
     }
 
-    window.location.href = `${API}/integrations/shopify/connect?shop=${encodeURIComponent(cleanedShop)}`;
+    if (!token) {
+      toast.error("You must be logged in before connecting Shopify");
+      return;
+    }
+
+    window.location.href = `${API}/integrations/shopify/connect?shop=${encodeURIComponent(cleanedShop)}&token=${encodeURIComponent(token)}`;
   };
 
   const handleConnect = async () => {
