@@ -1,4 +1,11 @@
-<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <rect width="64" height="64" rx="12" fill="#FA4616"/>
-  <path d="M16 20h6l4 16 4-16h4l4 16 4-16h6l-7 24h-5l-4-14-4 14h-5l-7-24z" fill="white"/>
-</svg>
+const WhopLogo = ({ className = "h-8 w-8" }) => (
+  <svg viewBox="0 0 24 24" className={className}>
+    <rect width="24" height="24" rx="6" fill="#FF6B00" />
+    <path
+      d="M6 12L10 8L14 12L18 8V12L14 16L10 12L6 16V12Z"
+      fill="white"
+    />
+  </svg>
+);
+
+export default WhopLogo;
