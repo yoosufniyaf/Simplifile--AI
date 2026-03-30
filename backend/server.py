@@ -1704,31 +1704,36 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
     if not access_token or not shop:
         raise HTTPException(status_code=400, detail="Shopify not properly connected")
 
-    # 🔥 GET REAL ORDERS FROM SHOPIFY
     response = requests.get(
         f"https://{shop}/admin/api/2023-10/orders.json",
         headers={
             "X-Shopify-Access-Token": access_token,
             "Content-Type": "application/json",
         },
-        params={
-            "status": "any",
-            "limit": 50,
-        },
+        params={"status": "any", "limit": 50},
     )
 
-    data = response.json()
-    orders = data.get("orders", [])
-
+    orders = response.json().get("orders", [])
     transactions = []
 
     for order in orders:
-        order_id = order.get("id")
+        order_id = str(order.get("id"))
+
+        # 🔥 CHECK DUPLICATE
+        existing = table_select_one(
+            "transactions",
+            {"user_id": user["id"], "external_id": order_id}
+        )
+
+        if existing:
+            continue
+
         total_price = float(order.get("total_price", 0))
 
         transactions.append({
             "id": str(uuid.uuid4()),
             "user_id": user["id"],
+            "external_id": order_id,
             "description": f"Shopify Order #{order_id}",
             "amount": total_price,
             "category": "sales",
@@ -1741,8 +1746,9 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
     table_insert_many("transactions", transactions)
 
     return {
-        "message": f"Imported {len(transactions)} Shopify orders",
+        "message": f"Imported {len(transactions)} new Shopify orders",
         "count": len(transactions)
+    }
     }
     ]
 
@@ -1945,7 +1951,59 @@ def shopify_callback(code: str, shop: str, state: str):
     return RedirectResponse("https://simplifile-ai.vercel.app/integrations")
 
 # ==================== REGISTER ROUTER ====================
+async def auto_sync_shopify(user_id: str):
+    integration = table_select_one("integrations", {
+        "user_id": user_id,
+        "platform": "shopify"
+    })
 
+    if not integration:
+        return
+
+    access_token = integration.get("access_token")
+    shop = integration.get("shop")
+
+    if not access_token or not shop:
+        return
+
+    try:
+        response = requests.get(
+            f"https://{shop}/admin/api/2023-10/orders.json",
+            headers={
+                "X-Shopify-Access-Token": access_token,
+                "Content-Type": "application/json",
+            },
+            params={"status": "any", "limit": 20},
+        )
+
+        orders = response.json().get("orders", [])
+
+        for order in orders:
+            order_id = str(order.get("id"))
+
+            existing = table_select_one(
+                "transactions",
+                {"user_id": user_id, "external_id": order_id}
+            )
+
+            if existing:
+                continue
+
+            table_insert_one("transactions", {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "external_id": order_id,
+                "description": f"Shopify Order #{order_id}",
+                "amount": float(order.get("total_price", 0)),
+                "category": "sales",
+                "date": order.get("created_at", now_iso())[:10],
+                "type": "income",
+                "source": "shopify",
+                "created_at": now_iso()
+            })
+
+    except Exception as e:
+        logger.error(f"Auto sync failed: {e}")
 app.include_router(api_router)
 
 app.add_middleware(
