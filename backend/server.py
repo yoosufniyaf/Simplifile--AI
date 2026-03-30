@@ -1808,6 +1808,8 @@ async def get_tax_insights(user: dict = Depends(get_current_user)):
 
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(user: dict = Depends(get_current_user)):
+    await auto_sync_shopify(user["id"])
+    require_feature_access(user)
     require_feature_access(user)
 
     doc_count = table_count("documents", {"user_id": user["id"]})
