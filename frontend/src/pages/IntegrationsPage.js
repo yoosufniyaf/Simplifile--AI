@@ -24,8 +24,8 @@ import axios from "axios";
 import { toast } from "sonner";
 
 import shopifyLogo from "../assets/logos/shopify.png";
-import paypalLogo from "../assets/logos/paypal.png";
 import whopLogo from "../assets/logos/whop.png";
+import paypalLogo from "../assets/logos/paypal.png";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -34,22 +34,22 @@ const PLATFORM_INFO = {
     name: "Shopify",
     description: "Import orders, revenue, refunds, and fees",
     logo: shopifyLogo,
-    logoAlt: "Shopify",
     color: "bg-green-500/10 border-green-500/20",
+    logoClassName: "h-10 w-10 object-contain",
   },
   paypal: {
     name: "PayPal",
     description: "Import transactions and fees",
     logo: paypalLogo,
-    logoAlt: "PayPal",
     color: "bg-blue-500/10 border-blue-500/20",
+    logoClassName: "h-10 w-10 object-contain",
   },
   whop: {
     name: "Whop",
     description: "Connect your Whop store for revenue tracking",
     logo: whopLogo,
-    logoAlt: "Whop",
     color: "bg-orange-500/10 border-orange-500/20",
+    logoClassName: "h-10 w-10 object-contain",
   },
 };
 
@@ -254,8 +254,8 @@ const IntegrationsPage = () => {
                     >
                       <img
                         src={info.logo}
-                        alt={info.logoAlt}
-                        className="h-9 w-9 object-contain"
+                        alt={info.name}
+                        className={info.logoClassName}
                         draggable="false"
                       />
                     </div>
