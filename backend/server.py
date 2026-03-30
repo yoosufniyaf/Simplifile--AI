@@ -1067,8 +1067,7 @@ async def whop_webhook(request: Request):
         inferred_plan = infer_plan_from_text(plan_hint) or user.get("plan", "basic")
         billing_cycle = infer_billing_from_text(plan_hint)
 
-        if event_type in {"payment_succeeded", "payment.succeeded"}:
-                    if event_type in {"payment_succeeded", "payment.succeeded"}:
+                if event_type in {"payment_succeeded", "payment.succeeded"}:
             payment_id = (
                 data.get("payment_id")
                 or data.get("invoice_id")
