@@ -1704,15 +1704,29 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
             raise HTTPException(status_code=400, detail="Shopify not properly connected")
 
         response = requests.get(
-            f"https://{shop}/admin/api/2023-10/orders.json",
+            f"https://{shop}/admin/api/2024-01/orders.json",
             headers={
                 "X-Shopify-Access-Token": access_token,
                 "Content-Type": "application/json",
             },
-            params={"status": "any", "limit": 50},
+            params={
+                "status": "any",
+                "limit": 50,
+            },
         )
 
-        orders = response.json().get("orders", [])
+        if response.status_code != 200:
+            logger.error(f"SHOPIFY SYNC ERROR {response.status_code}: {response.text}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Shopify API error: {response.text}"
+            )
+
+        data = response.json()
+        orders = data.get("orders", [])
+
+        logger.info(f"SHOPIFY SYNC shop={shop} orders_found={len(orders)}")
+
         transactions = []
 
         for order in orders:
@@ -1732,20 +1746,23 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
                 "id": str(uuid.uuid4()),
                 "user_id": user["id"],
                 "external_id": order_id,
-                "description": f"Shopify Order #{order_id}",
+                "description": f"Shopify Order #{order.get('name') or order_id}",
                 "amount": total_price,
                 "category": "sales",
-                "date": order.get("created_at", now_iso())[:10],
+                "date": (order.get("created_at") or now_iso())[:10],
                 "type": "income",
                 "source": "shopify",
                 "created_at": now_iso()
             })
 
-        table_insert_many("transactions", transactions)
+        if transactions:
+            table_insert_many("transactions", transactions)
 
         return {
             "message": f"Imported {len(transactions)} new Shopify orders",
-            "count": len(transactions)
+            "count": len(transactions),
+            "shop": shop,
+            "orders_found": len(orders)
         }
 
     raise HTTPException(status_code=400, detail=f"Sync not supported yet for {platform}")
@@ -1964,13 +1981,17 @@ async def auto_sync_shopify(user_id: str):
 
     try:
         response = requests.get(
-            f"https://{shop}/admin/api/2023-10/orders.json",
+            f"https://{shop}/admin/api/2024-01/orders.json",
             headers={
                 "X-Shopify-Access-Token": access_token,
                 "Content-Type": "application/json",
             },
             params={"status": "any", "limit": 20},
         )
+
+        if response.status_code != 200:
+            logger.error(f"AUTO SHOPIFY SYNC ERROR {response.status_code}: {response.text}")
+            return
 
         orders = response.json().get("orders", [])
 
@@ -1989,10 +2010,10 @@ async def auto_sync_shopify(user_id: str):
                 "id": str(uuid.uuid4()),
                 "user_id": user_id,
                 "external_id": order_id,
-                "description": f"Shopify Order #{order_id}",
+                "description": f"Shopify Order #{order.get('name') or order_id}",
                 "amount": float(order.get("total_price", 0)),
                 "category": "sales",
-                "date": order.get("created_at", now_iso())[:10],
+                "date": (order.get("created_at") or now_iso())[:10],
                 "type": "income",
                 "source": "shopify",
                 "created_at": now_iso()
