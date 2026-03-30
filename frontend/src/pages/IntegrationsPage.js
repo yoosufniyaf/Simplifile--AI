@@ -23,33 +23,26 @@ import {
 import axios from "axios";
 import { toast } from "sonner";
 
-import shopifyLogo from "../assets/logos/shopify.png";
-import whopLogo from "../assets/logos/whop.png";
-import paypalLogo from "../assets/logos/paypal.png";
-
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const PLATFORM_INFO = {
   shopify: {
     name: "Shopify",
     description: "Import orders, revenue, refunds, and fees",
-    logo: shopifyLogo,
+    logo: "/logos/shopify.png",
     color: "bg-green-500/10 border-green-500/20",
-    logoClassName: "h-10 w-10 object-contain",
   },
   paypal: {
     name: "PayPal",
     description: "Import transactions and fees",
-    logo: paypalLogo,
+    logo: "/logos/paypal.png",
     color: "bg-blue-500/10 border-blue-500/20",
-    logoClassName: "h-10 w-10 object-contain",
   },
   whop: {
     name: "Whop",
     description: "Connect your Whop store for revenue tracking",
-    logo: whopLogo,
+    logo: "/logos/whop.png",
     color: "bg-orange-500/10 border-orange-500/20",
-    logoClassName: "h-10 w-10 object-contain",
   },
 };
 
@@ -173,20 +166,15 @@ const IntegrationsPage = () => {
 
   if (!hasPremiumAccess) {
     return (
-      <div
-        className="flex flex-col items-center justify-center h-[60vh] text-center"
-        data-testid="integrations-locked"
-      >
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center">
         <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
           <Lock className="h-8 w-8 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
-          Premium Feature
-        </h2>
+        <h2 className="text-2xl font-bold mb-2">Premium Feature</h2>
         <p className="text-muted-foreground mb-6 max-w-md">
-          Upgrade to Premium to connect Shopify, PayPal, and Whop for automatic transaction imports.
+          Upgrade to Premium to connect Shopify, PayPal, and Whop.
         </p>
-        <Button className="glow-button" onClick={() => (window.location.href = "/pricing")}>
+        <Button onClick={() => (window.location.href = "/pricing")}>
           Upgrade to Premium
         </Button>
       </div>
@@ -196,44 +184,16 @@ const IntegrationsPage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   const connectedCount = integrations.filter((i) => i.status === "connected").length;
-  const totalPlatforms = PLATFORM_KEYS.length;
 
   return (
-    <div className="space-y-6" data-testid="integrations-page">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "Outfit, sans-serif" }}>
-          Integrations
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Connect your platforms for automatic data import
-        </p>
-      </div>
-
-      <Card className="bg-primary/5 border-primary/20">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Link2 className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold" style={{ fontFamily: "Outfit, sans-serif" }}>
-                  {connectedCount} of {totalPlatforms} Connected
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Connect all platforms for complete financial visibility
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Integrations</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {integrations.map((integration) => {
@@ -241,136 +201,43 @@ const IntegrationsPage = () => {
           const isConnected = integration.status === "connected";
 
           return (
-            <Card
-              key={integration.platform}
-              className="card-hover"
-              data-testid={`integration-${integration.platform}`}
-            >
+            <Card key={integration.platform}>
               <CardHeader>
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div
-                      className={`h-14 w-14 rounded-xl flex items-center justify-center overflow-hidden border ${info.color}`}
-                    >
+                    
+                    {/* ✅ LOGO FIX */}
+                    <div className={`h-14 w-14 rounded-xl flex items-center justify-center border ${info.color}`}>
                       <img
                         src={info.logo}
                         alt={info.name}
-                        className={info.logoClassName}
-                        draggable="false"
+                        className="h-10 w-10 object-contain"
                       />
                     </div>
 
                     <div>
-                      <CardTitle className="text-lg" style={{ fontFamily: "Outfit, sans-serif" }}>
-                        {info.name}
-                      </CardTitle>
+                      <CardTitle>{info.name}</CardTitle>
                       <CardDescription>{info.description}</CardDescription>
                     </div>
                   </div>
 
-                  <Badge variant={isConnected ? "default" : "secondary"}>
-                    {isConnected ? (
-                      <span className="flex items-center gap-1">
-                        <Check className="h-3 w-3" />
-                        Connected
-                      </span>
-                    ) : (
-                      "Not Connected"
-                    )}
+                  <Badge>
+                    {isConnected ? "Connected" : "Not Connected"}
                   </Badge>
                 </div>
               </CardHeader>
 
               <CardContent>
-                {isConnected ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Connected on{" "}
-                      {integration.connected_at
-                        ? new Date(integration.connected_at).toLocaleDateString()
-                        : "Unknown"}
-                    </p>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSync(integration.platform)}
-                        disabled={syncing === integration.platform}
-                        data-testid={`sync-${integration.platform}`}
-                      >
-                        {syncing === integration.platform ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        Sync Now
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDisconnect(integration.platform)}
-                        data-testid={`disconnect-${integration.platform}`}
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        Disconnect
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Connect {info.name} to import transactions automatically.
-                    </p>
-
-                    <Button
-                      className="glow-button"
-                      size="sm"
-                      onClick={() => openConnectDialog(integration.platform)}
-                      data-testid={`connect-${integration.platform}`}
-                    >
-                      Connect {info.name}
-                    </Button>
-                  </div>
+                {!isConnected && (
+                  <Button onClick={() => openConnectDialog(integration.platform)}>
+                    Connect {info.name}
+                  </Button>
                 )}
               </CardContent>
             </Card>
           );
         })}
       </div>
-
-      <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle style={{ fontFamily: "Outfit, sans-serif" }}>
-              Connect {selectedPlatform ? PLATFORM_INFO[selectedPlatform].name : "Platform"}
-            </DialogTitle>
-            <DialogDescription>
-              Connect this platform to import transactions automatically. Secure OAuth connection
-              can be added later, but for now this will connect through your current backend flow.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-            No API key is needed here. Just click connect to continue.
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={closeConnectDialog} disabled={connecting}>
-              Cancel
-            </Button>
-            <Button onClick={handleConnect} disabled={connecting || !selectedPlatform}>
-              {connecting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Zap className="mr-2 h-4 w-4" />
-              )}
-              Connect
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
