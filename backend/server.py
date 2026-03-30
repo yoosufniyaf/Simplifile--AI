@@ -1697,29 +1697,53 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not connected")
 
-    mock_transactions = [
-        {
-            "id": str(uuid.uuid4()),
-            "user_id": user["id"],
-            "description": f"{platform.title()} - Order #12345",
-            "amount": 99.99,
-            "category": "other",
-            "date": now_iso()[:10],
-            "type": "income",
-            "source": platform,
-            "created_at": now_iso()
+    if platform == "shopify":
+    access_token = integration.get("access_token")
+    shop = integration.get("shop")
+
+    if not access_token or not shop:
+        raise HTTPException(status_code=400, detail="Shopify not properly connected")
+
+    # 🔥 GET REAL ORDERS FROM SHOPIFY
+    response = requests.get(
+        f"https://{shop}/admin/api/2023-10/orders.json",
+        headers={
+            "X-Shopify-Access-Token": access_token,
+            "Content-Type": "application/json",
         },
-        {
+        params={
+            "status": "any",
+            "limit": 50,
+        },
+    )
+
+    data = response.json()
+    orders = data.get("orders", [])
+
+    transactions = []
+
+    for order in orders:
+        order_id = order.get("id")
+        total_price = float(order.get("total_price", 0))
+
+        transactions.append({
             "id": str(uuid.uuid4()),
             "user_id": user["id"],
-            "description": f"{platform.title()} - Platform Fee",
-            "amount": -9.99,
-            "category": "fees",
-            "date": now_iso()[:10],
-            "type": "expense",
-            "source": platform,
+            "description": f"Shopify Order #{order_id}",
+            "amount": total_price,
+            "category": "sales",
+            "date": order.get("created_at", now_iso())[:10],
+            "type": "income",
+            "source": "shopify",
             "created_at": now_iso()
-        }
+        })
+
+    table_insert_many("transactions", transactions)
+
+    return {
+        "message": f"Imported {len(transactions)} Shopify orders",
+        "count": len(transactions)
+    }
     ]
 
     table_insert_many("transactions", mock_transactions)
