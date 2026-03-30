@@ -1068,13 +1068,14 @@ async def whop_webhook(request: Request):
         billing_cycle = infer_billing_from_text(plan_hint)
 
         if event_type in {"payment_succeeded", "payment.succeeded"}:
+                    if event_type in {"payment_succeeded", "payment.succeeded"}:
             payment_id = (
                 data.get("payment_id")
                 or data.get("invoice_id")
                 or data.get("id")
             )
 
-                        amount_value = data.get("amount")
+            amount_value = data.get("amount")
             amount = 0.0
             try:
                 amount = float(amount_value) / 100 if amount_value is not None else 0.0
@@ -1097,6 +1098,7 @@ async def whop_webhook(request: Request):
                     "whop_manage_url": membership.get("manage_url") or membership.get("manageUrl")
                 }
             )
+
             existing_transaction = None
             if payment_id:
                 existing_rows = table_select(
