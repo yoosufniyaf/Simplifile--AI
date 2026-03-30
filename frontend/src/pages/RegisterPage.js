@@ -68,11 +68,14 @@ const RegisterPage = () => {
 
         <div className="max-w-md w-full mx-auto lg:mx-0">
           <Link to="/" className="flex items-center gap-3 mb-8">
-            <img
-              src="/logo.png"
-              alt="Simplifile AI logo"
-              className="h-11 w-11 rounded-xl object-contain"
-            />
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 glow-button flex items-center justify-center">
+              <div className="relative w-5 h-5">
+                <div className="absolute w-2 h-2 bg-white rounded-full top-0 left-1.5" />
+                <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 left-0" />
+                <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 right-0" />
+                <div className="absolute w-full h-full border border-white/30 rounded-full" />
+              </div>
+            </div>
             <span
               className="font-semibold text-xl"
               style={{ fontFamily: "Outfit, sans-serif" }}
