@@ -1850,12 +1850,13 @@ SHOPIFY_REDIRECT_URI = os.getenv("SHOPIFY_REDIRECT_URI")
 
 
 @api_router.get("/integrations/shopify/connect")
-def connect_shopify(shop: str):
+def connect_shopify(shop: str, token: str):
     auth_url = (
         f"https://{shop}/admin/oauth/authorize"
         f"?client_id={SHOPIFY_CLIENT_ID}"
         f"&scope=read_orders,read_products,read_customers"
         f"&redirect_uri={SHOPIFY_REDIRECT_URI}"
+        f"&state={token}"
     )
     return RedirectResponse(auth_url)
 
