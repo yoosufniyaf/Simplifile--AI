@@ -1686,7 +1686,7 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
 
     return {"message": f"{platform} disconnected"}
 
-@api_router.post("/integrations/{platform}/sync")
+    @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
