@@ -1015,7 +1015,7 @@ async def get_plans():
                     "Transaction Categorization",
                     "P&L, Monthly Summary",
                     "MRR, Burn Rate, CAC Insights",
-                    "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
+                    "Auto Integrations (Shopify, PayPal, Whop)",
                     "Financial Statements Auto-Generated",
                     "Manual Editing & Custom Entries",
                     "PDF/CSV Export",
@@ -1080,6 +1080,7 @@ async def whop_webhook(request: Request):
                 amount = float(amount_value) / 100 if amount_value is not None else 0.0
             except Exception:
                 amount = 0.0
+                membership = data.get("membership") or data.get("member") or {}
 
             table_update(
                 "users",
@@ -1091,8 +1092,8 @@ async def whop_webhook(request: Request):
                     "trial_started": False,
                     "trial_ends_at": None,
                     "last_payment_id": payment_id,
-                    "whop_membership_id": (data.get("membership") or {}).get("id"),
-                    "whop_manage_url": (data.get("membership") or {}).get("manage_url")
+                    "whop_membership_id": membership.get("id"),
+                    "whop_manage_url": membership.get("manage_url") or membership.get("manageUrl")
                 }
             )
 
