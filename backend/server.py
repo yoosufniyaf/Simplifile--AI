@@ -1882,30 +1882,8 @@ def shopify_callback(code: str, shop: str):
         "access_token": access_token,
     }
 
-
 # ==================== REGISTER ROUTER ====================
 
-@api_router.get("/integrations/shopify/callback")
-def shopify_callback(code: str, shop: str):
-    token_url = f"https://{shop}/admin/oauth/access_token"
-
-    response = requests.post(
-        token_url,
-        json={
-            "client_id": SHOPIFY_CLIENT_ID,
-            "client_secret": SHOPIFY_CLIENT_SECRET,
-            "code": code,
-        },
-    )
-
-    data = response.json()
-    access_token = data.get("access_token")
-
-    return {
-        "shop": shop,
-        "connected": bool(access_token),
-        "access_token": access_token,
-    }
 app.include_router(api_router)
 
 app.add_middleware(
