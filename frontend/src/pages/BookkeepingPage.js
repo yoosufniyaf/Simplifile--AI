@@ -1,3 +1,4 @@
+const [filter, setFilter] = useState("all");
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -436,6 +437,19 @@ const BookkeepingPage = () => {
         </CardHeader>
 
         <CardContent>
+        <div className="flex justify-between items-center mb-4">
+  <Select value={filter} onValueChange={setFilter}>
+    <SelectTrigger className="w-[180px]">
+      <SelectValue placeholder="Filter" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="all">All</SelectItem>
+      <SelectItem value="shopify">Shopify</SelectItem>
+      <SelectItem value="manual">Manual</SelectItem>
+      <SelectItem value="csv_import">CSV</SelectItem>
+    </SelectContent>
+  </Select>
+</div>
           {loading ? (
             <AILoadingState message="Loading transactions..." />
           ) : transactions.length === 0 ? (
@@ -473,19 +487,48 @@ const BookkeepingPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.map((trans) => (
+                     {transactions
+  .filter((t) => {
+    if (filter === "all") return true;
+    if (filter === "manual") return !t.source || t.source === "manual";
+    return t.source === filter;
+  })
+  .map((trans) => (
                       <TableRow key={trans.id} className="group">
                         <TableCell className="text-muted-foreground">
                           {new Date(trans.date).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
-                          <div>
-                            <p className="font-medium">{trans.description}</p>
-                            <p className="text-xs text-muted-foreground capitalize">
-                              {trans.source || "manual"}
-                            </p>
-                          </div>
-                        </TableCell>
+  <div className="flex flex-col gap-1">
+    <p className="font-medium">{trans.description}</p>
+
+    <div className="flex items-center gap-2">
+      {trans.source === "shopify" && (
+        <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+          Shopify
+        </Badge>
+      )}
+
+      {trans.source === "shopify_refund" && (
+        <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+          Refund
+        </Badge>
+      )}
+
+      {trans.source === "csv_import" && (
+        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+          CSV
+        </Badge>
+      )}
+
+      {(!trans.source || trans.source === "manual") && (
+        <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">
+          Manual
+        </Badge>
+      )}
+    </div>
+  </div>
+</TableCell>
                         <TableCell>
                           <Badge className={getCategoryColor(trans.category)}>
                             {trans.category}
