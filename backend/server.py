@@ -1703,7 +1703,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         if not access_token or not shop:
             raise HTTPException(status_code=400, detail="Shopify not properly connected")
 
-                query = """
+        query = """
         query GetOrders {
           orders(first: 50, sortKey: CREATED_AT, reverse: true) {
             edges {
@@ -1777,23 +1777,6 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         return {
             "message": f"Imported {len(transactions)} new Shopify orders",
             "count": len(transactions)
-        }
-                "amount": total_price,
-                "category": "sales",
-                "date": (order.get("created_at") or now_iso())[:10],
-                "type": "income",
-                "source": "shopify",
-                "created_at": now_iso()
-            })
-
-        if transactions:
-            table_insert_many("transactions", transactions)
-
-        return {
-            "message": f"Imported {len(transactions)} new Shopify orders",
-            "count": len(transactions),
-            "shop": shop,
-            "orders_found": len(orders)
         }
 
     raise HTTPException(status_code=400, detail=f"Sync not supported yet for {platform}")
@@ -1961,8 +1944,56 @@ def shopify_callback(code: str, shop: str, state: str):
     if not access_token:
         raise HTTPException(status_code=400, detail="Failed to get Shopify token")
 
-    # ✅ SAVE TO DATABASE
-            query = """
+    existing = table_select_one("integrations", {
+        "user_id": user_id,
+        "platform": "shopify"
+    })
+
+    if existing:
+        table_update(
+            "integrations",
+            {"id": existing["id"]},
+            {
+                "status": "connected",
+                "connected_at": now_iso(),
+                "shop": shop,
+                "access_token": access_token,
+            }
+        )
+    else:
+        table_insert_one(
+            "integrations",
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "platform": "shopify",
+                "status": "connected",
+                "connected_at": now_iso(),
+                "shop": shop,
+                "access_token": access_token,
+            }
+        )
+
+    return RedirectResponse("https://simplifile-ai.vercel.app/integrations")
+
+# ==================== REGISTER ROUTER ====================
+async def auto_sync_shopify(user_id: str):
+    integration = table_select_one("integrations", {
+        "user_id": user_id,
+        "platform": "shopify"
+    })
+
+    if not integration:
+        return
+
+    access_token = integration.get("access_token")
+    shop = integration.get("shop")
+
+    if not access_token or not shop:
+        return
+
+    try:
+        query = """
         query GetOrders {
           orders(first: 20, sortKey: CREATED_AT, reverse: true) {
             edges {
@@ -2025,61 +2056,10 @@ def shopify_callback(code: str, shop: str, state: str):
                 "source": "shopify",
                 "created_at": now_iso()
             })
-        "user_id": user_id,
-        "platform": "shopify"
-    })
-
-    if not integration:
-        return
-
-    access_token = integration.get("access_token")
-    shop = integration.get("shop")
-
-    if not access_token or not shop:
-        return
-
-    try:
-        response = requests.get(
-            f"https://{shop}/admin/api/2024-01/orders.json",
-            headers={
-                "X-Shopify-Access-Token": access_token,
-                "Content-Type": "application/json",
-            },
-            params={"status": "any", "limit": 20},
-        )
-
-        if response.status_code != 200:
-            logger.error(f"AUTO SHOPIFY SYNC ERROR {response.status_code}: {response.text}")
-            return
-
-        orders = response.json().get("orders", [])
-
-        for order in orders:
-            order_id = str(order.get("id"))
-
-            existing = table_select_one(
-                "transactions",
-                {"user_id": user_id, "external_id": order_id}
-            )
-
-            if existing:
-                continue
-
-            table_insert_one("transactions", {
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "external_id": order_id,
-                "description": f"Shopify Order #{order.get('name') or order_id}",
-                "amount": float(order.get("total_price", 0)),
-                "category": "sales",
-                "date": (order.get("created_at") or now_iso())[:10],
-                "type": "income",
-                "source": "shopify",
-                "created_at": now_iso()
-            })
 
     except Exception as e:
         logger.error(f"Auto sync failed: {e}")
+
 app.include_router(api_router)
 
 app.add_middleware(
