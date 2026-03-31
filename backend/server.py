@@ -2224,7 +2224,50 @@ async def shopify_webhook(request: Request):
         return {"status": "ok", "event": "order_updated"}
 
     return {"status": "ignored", "reason": f"Unhandled topic: {topic}"}
-    app.include_router(api_router)
+    def create_shopify_webhooks(shop, access_token):
+    url = f"https://{shop}/admin/api/2024-01/webhooks.json"
+
+    headers = {
+        "X-Shopify-Access-Token": access_token,
+        "Content-Type": "application/json",
+    }
+
+    webhooks = [
+        {
+            "topic": "orders/create",
+            "address": "https://simplifile-ai.onrender.com/api/integrations/shopify/webhook",
+            "format": "json",
+        },
+        {
+            "topic": "orders/updated",
+            "address": "https://simplifile-ai.onrender.com/api/integrations/shopify/webhook",
+            "format": "json",
+        },
+    ]
+
+    for webhook in webhooks:
+        try:
+            response = requests.post(
+                url,
+                headers=headers,
+                json={"webhook": webhook}
+            )
+            if response.status_code not in [200, 201]:
+                logger.error(f"Webhook creation failed: {response.status_code} {response.text}")
+        except Exception as e:
+            logger.error(f"Webhook creation failed: {e}")
+
+
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
