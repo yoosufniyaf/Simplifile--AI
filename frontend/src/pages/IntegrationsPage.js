@@ -27,12 +27,6 @@ const PLATFORM_INFO = {
     logo: "/logos/shopify.png",
     color: "bg-green-500/10 border-green-500/20",
   },
-  paypal: {
-    name: "PayPal",
-    description: "Import transactions and fees",
-    logo: "/logos/paypal.png",
-    color: "bg-blue-500/10 border-blue-500/20",
-  },
   whop: {
     name: "Whop",
     description: "Connect your Whop store for revenue tracking",
@@ -196,7 +190,7 @@ const IntegrationsPage = () => {
         </div>
         <h2 className="text-2xl font-bold mb-2">Premium Feature</h2>
         <p className="text-muted-foreground mb-6 max-w-md">
-          Upgrade to Premium to connect Shopify, PayPal, and Whop.
+          Upgrade to Premium to connect Shopify and Whop.
         </p>
         <Button onClick={() => (window.location.href = "/pricing")}>
           Upgrade to Premium
@@ -221,7 +215,7 @@ const IntegrationsPage = () => {
         <div>
           <h1 className="text-3xl font-bold">Integrations</h1>
           <p className="text-muted-foreground mt-1">
-            Connect your stores and payment platforms to sync business transactions automatically.
+            Connect your stores to sync business transactions automatically.
           </p>
         </div>
 
@@ -304,7 +298,7 @@ const IntegrationsPage = () => {
               Connect {selectedPlatform ? PLATFORM_INFO[selectedPlatform]?.name : "Integration"}
             </DialogTitle>
             <DialogDescription>
-              This will connect your account so Simplifile AI can track transactions and sync relevant financial data.
+              This will connect your account so Simplifile AI can sync relevant business data.
             </DialogDescription>
           </DialogHeader>
 
