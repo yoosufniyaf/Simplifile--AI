@@ -2224,7 +2224,8 @@ async def shopify_webhook(request: Request):
         return {"status": "ok", "event": "order_updated"}
 
     return {"status": "ignored", "reason": f"Unhandled topic: {topic}"}
-    def create_shopify_webhooks(shop, access_token):
+    
+def create_shopify_webhooks(shop, access_token):
     url = f"https://{shop}/admin/api/2024-01/webhooks.json"
 
     headers = {
