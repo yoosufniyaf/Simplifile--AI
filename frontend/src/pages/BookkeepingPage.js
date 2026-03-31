@@ -1,4 +1,3 @@
-const [filter, setFilter] = useState("all");
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -118,6 +117,7 @@ const BookkeepingPage = () => {
   const [transactions, setTransactions] = useState([]);
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
   const [uploading, setUploading] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
