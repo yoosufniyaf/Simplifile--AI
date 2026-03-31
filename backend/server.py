@@ -1705,7 +1705,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
 
         query = """
         query GetOrders {
-          orders(first: 10) {
+          orders(first: 50, sortKey: CREATED_AT, reverse: true) {
             edges {
               node {
                 id
@@ -1762,7 +1762,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
                 "id": str(uuid.uuid4()),
                 "user_id": user["id"],
                 "external_id": order_id,
-                "description": f"Shopify Order {order_id}",
+                "description": f"Shopify Order {order.get('name') or order_id}",
                 "amount": total_price,
                 "category": "sales",
                 "date": (order.get("createdAt") or now_iso())[:10],
@@ -1975,65 +1975,6 @@ def shopify_callback(code: str, shop: str, state: str):
         )
 
     return RedirectResponse("https://simplifile-ai.vercel.app/integrations")
-    import hmac
-import hashlib
-
-SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
-
-@api_router.post("/integrations/shopify/webhook")
-async def shopify_webhook(request: Request):
-    raw_body = await request.body()
-    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
-    shop = request.headers.get("X-Shopify-Shop-Domain", "")
-
-    digest = base64.b64encode(
-        hmac.new(
-            SHOPIFY_WEBHOOK_SECRET.encode("utf-8"),
-            raw_body,
-            hashlib.sha256
-        ).digest()
-    ).decode("utf-8")
-
-    if not hmac.compare_digest(digest, hmac_header):
-        raise HTTPException(status_code=401, detail="Invalid Shopify webhook signature")
-
-    payload = await request.json()
-
-    integration = table_select_one("integrations", {
-        "platform": "shopify",
-        "shop": shop
-    })
-
-    if not integration:
-        return {"status": "ignored", "reason": "integration not found"}
-
-    user_id = integration["user_id"]
-    order_id = str(payload.get("id"))
-
-    existing = table_select_one(
-        "transactions",
-        {"user_id": user_id, "external_id": order_id}
-    )
-
-    if existing:
-        return {"status": "ignored", "reason": "already imported"}
-
-    total_price = float(payload.get("current_total_price") or payload.get("total_price") or 0)
-
-    table_insert_one("transactions", {
-        "id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "external_id": order_id,
-        "description": f"Shopify Order {payload.get('name') or order_id}",
-        "amount": total_price,
-        "category": "sales",
-        "date": (payload.get("created_at") or now_iso())[:10],
-        "type": "income",
-        "source": "shopify",
-        "created_at": now_iso()
-    })
-
-    return {"status": "ok"}
 
 # ==================== REGISTER ROUTER ====================
 async def auto_sync_shopify(user_id: str):
@@ -2053,22 +1994,23 @@ async def auto_sync_shopify(user_id: str):
 
     try:
         query = """
-query {
-  orders(first: 10) {
-    edges {
-      node {
-        id
-        createdAt
-        currentTotalPriceSet {
-          shopMoney {
-            amount
+        query GetOrders {
+          orders(first: 20, sortKey: CREATED_AT, reverse: true) {
+            edges {
+              node {
+                id
+                name
+                createdAt
+                currentTotalPriceSet {
+                  shopMoney {
+                    amount
+                  }
+                }
+              }
+            }
           }
         }
-      }
-    }
-  }
-}
-"""
+        """
 
         response = requests.post(
             f"https://{shop}/admin/api/2024-01/graphql.json",
