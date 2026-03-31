@@ -1,3 +1,5 @@
+import hmac
+import hashlib
 import os
 import requests
 from fastapi.responses import RedirectResponse
@@ -2059,8 +2061,6 @@ async def auto_sync_shopify(user_id: str):
 
     except Exception as e:
         logger.error(f"Auto sync failed: {e}")
-        import hmac
-import hashlib
 
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
 
@@ -2119,6 +2119,15 @@ async def shopify_webhook(request: Request):
 
     return {"status": "ok"}
 
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(api_router)
 
 app.add_middleware(
