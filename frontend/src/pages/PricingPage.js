@@ -147,7 +147,7 @@ const PricingPage = () => {
                     "Transaction Categorization",
                     "P&L, Monthly Summary",
                     "MRR, Burn Rate, CAC Insights",
-                    "Auto Integrations (Shopify, Stripe, PayPal, Whop)",
+                    "Auto Integrations (Shopify, Whop)",
                     "Financial Statements Auto-Generated",
                     "Manual Editing & Custom Entries",
                     "PDF & CSV Export",
