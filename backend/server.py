@@ -1705,7 +1705,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
 
         query = """
         query GetOrders {
-          orders(first: 50, sortKey: CREATED_AT, reverse: true) {
+          orders(first: 10) {
             edges {
               node {
                 id
@@ -1762,7 +1762,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
                 "id": str(uuid.uuid4()),
                 "user_id": user["id"],
                 "external_id": order_id,
-                "description": f"Shopify Order {order.get('name') or order_id}",
+                "description": f"Shopify Order {order_id}",
                 "amount": total_price,
                 "category": "sales",
                 "date": (order.get("createdAt") or now_iso())[:10],
@@ -1994,23 +1994,22 @@ async def auto_sync_shopify(user_id: str):
 
     try:
         query = """
-        query GetOrders {
-          orders(first: 20, sortKey: CREATED_AT, reverse: true) {
-            edges {
-              node {
-                id
-                name
-                createdAt
-                currentTotalPriceSet {
-                  shopMoney {
-                    amount
-                  }
-                }
-              }
-            }
+query {
+  orders(first: 10) {
+    edges {
+      node {
+        id
+        createdAt
+        currentTotalPriceSet {
+          shopMoney {
+            amount
           }
         }
-        """
+      }
+    }
+  }
+}
+"""
 
         response = requests.post(
             f"https://{shop}/admin/api/2024-01/graphql.json",
