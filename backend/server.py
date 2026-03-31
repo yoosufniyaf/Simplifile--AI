@@ -2246,9 +2246,30 @@ def create_shopify_webhooks(shop, access_token):
         },
     ]
 
+    def create_shopify_webhooks(shop, access_token):
+    url = f"https://{shop}/admin/api/2024-01/webhooks.json"
+
+    headers = {
+        "X-Shopify-Access-Token": access_token,
+        "Content-Type": "application/json",
+    }
+
+    webhooks = [
+        {
+            "topic": "orders/create",
+            "address": "https://simplifile-ai.onrender.com/api/integrations/shopify/webhook",
+            "format": "json",
+        },
+        {
+            "topic": "orders/updated",
+            "address": "https://simplifile-ai.onrender.com/api/integrations/shopify/webhook",
+            "format": "json",
+        },
+    ]
+
     for webhook in webhooks:
         try:
-                        response = requests.post(
+            response = requests.post(
                 url,
                 headers=headers,
                 json={"webhook": webhook}
