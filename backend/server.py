@@ -1642,12 +1642,18 @@ async def get_integrations(user: dict = Depends(get_current_user)):
 
     return [IntegrationResponse(**row) for row in rows]
 
+
 @api_router.post("/integrations/connect")
 async def connect_integration(payload: IntegrationConnect, user: dict = Depends(get_current_user)):
     require_feature_access(user)
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
+
+    allowed_platforms = {"shopify", "whop"}
+
+    if payload.platform not in allowed_platforms:
+        raise HTTPException(status_code=400, detail="Unsupported integration platform")
 
     existing = table_select_one("integrations", {"user_id": user["id"], "platform": payload.platform})
 
@@ -1660,12 +1666,6 @@ async def connect_integration(payload: IntegrationConnect, user: dict = Depends(
                 "connected_at": now_iso(),
             }
         )
-            if not check_plan_access(user, "premium"):
-        raise HTTPException(status_code=403, detail="Premium plan required")
-            allowed_platforms = {"shopify", "whop"}
-
-    if payload.platform not in allowed_platforms:
-        raise HTTPException(status_code=400, detail="Unsupported integration platform")
     else:
         table_insert_one(
             "integrations",
@@ -1680,6 +1680,7 @@ async def connect_integration(payload: IntegrationConnect, user: dict = Depends(
 
     return {"message": f"{payload.platform} connected successfully"}
 
+
 @api_router.delete("/integrations/{platform}")
 async def disconnect_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1687,17 +1688,17 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
 
+    allowed_platforms = {"shopify", "whop"}
+
+    if platform not in allowed_platforms:
+        raise HTTPException(status_code=400, detail="Unsupported integration platform")
+
     deleted = table_delete("integrations", {"user_id": user["id"], "platform": platform})
     if not deleted:
         raise HTTPException(status_code=404, detail="Integration not found")
 
     return {"message": f"{platform} disconnected"}
-        if not check_plan_access(user, "premium"):
-        raise HTTPException(status_code=403, detail="Premium plan required")
-            allowed_platforms = {"shopify", "whop"}
 
-    if platform not in allowed_platforms:
-        raise HTTPException(status_code=400, detail="Unsupported integration platform")
 
 @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
@@ -1705,7 +1706,8 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
-            allowed_platforms = {"shopify", "whop"}
+
+    allowed_platforms = {"shopify", "whop"}
 
     if platform not in allowed_platforms:
         raise HTTPException(status_code=400, detail="Unsupported integration platform")
@@ -1750,13 +1752,11 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         )
 
         if response.status_code != 200:
-            logger.error(f"SHOPIFY GRAPHQL ERROR {response.status_code}: {response.text}")
             raise HTTPException(status_code=400, detail=f"Shopify API error: {response.text}")
 
         data = response.json()
 
         if data.get("errors"):
-            logger.error(f"SHOPIFY GRAPHQL ERRORS: {data}")
             raise HTTPException(status_code=400, detail=f"Shopify GraphQL error: {data['errors']}")
 
         orders = data.get("data", {}).get("orders", {}).get("edges", [])
