@@ -113,7 +113,7 @@ const SettingsPage = () => {
                       "Transaction Categorization",
                       "P&L, Monthly Summary",
                       "MRR, Burn Rate, CAC Insights",
-                      "Auto Integrations (Shopify, PayPal, Whop)",
+                      "Auto Integrations (Shopify, Whop)",
                       "Financial Statements Auto-Generated",
                       "Manual Editing & Custom Entries",
                       "PDF/CSV Export",
