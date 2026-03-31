@@ -2069,6 +2069,7 @@ async def shopify_webhook(request: Request):
     raw_body = await request.body()
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     shop = request.headers.get("X-Shopify-Shop-Domain", "")
+    topic = request.headers.get("X-Shopify-Topic", "")
 
     digest = base64.b64encode(
         hmac.new(
@@ -2093,31 +2094,135 @@ async def shopify_webhook(request: Request):
 
     user_id = integration["user_id"]
     order_id = str(payload.get("id"))
+    order_name = payload.get("name") or order_id
+    created_at = (payload.get("created_at") or now_iso())[:10]
 
-    existing = table_select_one(
-        "transactions",
-        {"user_id": user_id, "external_id": order_id}
-    )
+    # ----------------------------
+    # ORDER CREATED
+    # ----------------------------
+    if topic == "orders/create":
+        existing = table_select_one(
+            "transactions",
+            {"user_id": user_id, "external_id": order_id, "source": "shopify"}
+        )
 
-    if existing:
-        return {"status": "ignored", "reason": "already imported"}
+        if existing:
+            return {"status": "ignored", "reason": "already imported"}
 
-    total_price = float(payload.get("current_total_price") or payload.get("total_price") or 0)
+        total_price = float(payload.get("current_total_price") or payload.get("total_price") or 0)
 
-    table_insert_one("transactions", {
-        "id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "external_id": order_id,
-        "description": f"Shopify Order {payload.get('name') or order_id}",
-        "amount": total_price,
-        "category": "sales",
-        "date": (payload.get("created_at") or now_iso())[:10],
-        "type": "income",
-        "source": "shopify",
-        "created_at": now_iso()
-    })
+        table_insert_one("transactions", {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "external_id": order_id,
+            "description": f"Shopify Order {order_name}",
+            "amount": total_price,
+            "category": "sales",
+            "date": created_at,
+            "type": "income",
+            "source": "shopify",
+            "created_at": now_iso()
+        })
 
-    return {"status": "ok"}
+        return {"status": "ok", "event": "order_created"}
+
+    # ----------------------------
+    # ORDER UPDATED / REFUND / CANCEL
+    # ----------------------------
+    if topic == "orders/updated":
+        # 1) Handle refunds
+        refunds = payload.get("refunds") or []
+        total_refunded = 0.0
+
+        for refund in refunds:
+            refund_id = str(refund.get("id") or "")
+            refund_transactions = refund.get("transactions") or []
+
+            refund_amount = 0.0
+            for tx in refund_transactions:
+                try:
+                    refund_amount += abs(float(tx.get("amount") or 0))
+                except Exception:
+                    pass
+
+            # fallback if Shopify sends refund object without transaction amount
+            if refund_amount == 0:
+                refund_line_items = refund.get("refund_line_items") or []
+                for item in refund_line_items:
+                    line_item = item.get("line_item") or {}
+                    quantity = float(item.get("quantity") or 0)
+                    price = float(line_item.get("price") or 0)
+                    refund_amount += quantity * price
+
+            if refund_amount <= 0:
+                continue
+
+            total_refunded += refund_amount
+
+            refund_external_id = f"{order_id}_refund_{refund_id}"
+
+            existing_refund = table_select_one(
+                "transactions",
+                {
+                    "user_id": user_id,
+                    "external_id": refund_external_id,
+                    "source": "shopify_refund"
+                }
+            )
+
+            if existing_refund:
+                continue
+
+            processed_at = (refund.get("created_at") or payload.get("updated_at") or now_iso())[:10]
+
+            table_insert_one("transactions", {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "external_id": refund_external_id,
+                "description": f"Shopify Refund for Order {order_name}",
+                "amount": -abs(refund_amount),
+                "category": "refunds",
+                "date": processed_at,
+                "type": "expense",
+                "source": "shopify_refund",
+                "created_at": now_iso()
+            })
+
+        # 2) Handle cancelled orders with no refund object
+        cancelled_at = payload.get("cancelled_at")
+        if cancelled_at:
+            cancel_external_id = f"{order_id}_cancel"
+
+            existing_cancel = table_select_one(
+                "transactions",
+                {
+                    "user_id": user_id,
+                    "external_id": cancel_external_id,
+                    "source": "shopify_refund"
+                }
+            )
+
+            if not existing_cancel:
+                total_price = float(payload.get("current_total_price") or payload.get("total_price") or 0)
+
+                # Only create cancellation adjustment if no refund amount was already inserted
+                if total_refunded == 0 and total_price > 0:
+                    table_insert_one("transactions", {
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "external_id": cancel_external_id,
+                        "description": f"Shopify Cancelled Order {order_name}",
+                        "amount": -abs(total_price),
+                        "category": "refunds",
+                        "date": cancelled_at[:10],
+                        "type": "expense",
+                        "source": "shopify_refund",
+                        "created_at": now_iso()
+                    })
+
+        return {"status": "ok", "event": "order_updated"}
+
+    return {"status": "ignored", "reason": f"Unhandled topic: {topic}"}
 
 app.include_router(api_router)
 
@@ -2128,3 +2233,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+def create_shopify_webhooks(shop, access_token):
+    url = f"https://{shop}/admin/api/2024-01/webhooks.json"
+
+    headers = {
+        "X-Shopify-Access-Token": access_token,
+        "Content-Type": "application/json",
+    }
+
+    webhooks = [
+        {
+            "topic": "orders/create",
+            "address": "https://simplifile-ai.onrender.com/api/integrations/shopify/webhook",
+            "format": "json",
+        },
+        {
+            "topic": "orders/updated",
+            "address": "https://simplifile-ai.onrender.com/api/integrations/shopify/webhook",
+            "format": "json",
+        },
+    ]
+
+    for webhook in webhooks:
+        try:
+            requests.post(
+                url,
+                headers=headers,
+                json={"webhook": webhook}
+            )
+        except Exception as e:
+            logger.error(f"Webhook creation failed: {e}")
