@@ -1976,6 +1976,7 @@ def shopify_callback(code: str, shop: str, state: str):
             }
         )
 
+    create_shopify_webhooks(shop, access_token)
     return RedirectResponse("https://simplifile-ai.vercel.app/integrations")
 
 # ==================== REGISTER ROUTER ====================
@@ -2224,15 +2225,6 @@ async def shopify_webhook(request: Request):
 
     return {"status": "ignored", "reason": f"Unhandled topic: {topic}"}
 
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 def create_shopify_webhooks(shop, access_token):
     url = f"https://{shop}/admin/api/2024-01/webhooks.json"
 
@@ -2256,10 +2248,21 @@ def create_shopify_webhooks(shop, access_token):
 
     for webhook in webhooks:
         try:
-            requests.post(
+                        response = requests.post(
                 url,
                 headers=headers,
                 json={"webhook": webhook}
             )
+            if response.status_code not in [200, 201]:
+                logger.error(f"Webhook creation failed: {response.status_code} {response.text}")
         except Exception as e:
             logger.error(f"Webhook creation failed: {e}")
+            app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
