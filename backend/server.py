@@ -1703,33 +1703,49 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         if not access_token or not shop:
             raise HTTPException(status_code=400, detail="Shopify not properly connected")
 
-        response = requests.get(
-            f"https://{shop}/admin/api/2024-01/orders.json",
+                query = """
+        query GetOrders {
+          orders(first: 50, sortKey: CREATED_AT, reverse: true) {
+            edges {
+              node {
+                id
+                name
+                createdAt
+                currentTotalPriceSet {
+                  shopMoney {
+                    amount
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+
+        response = requests.post(
+            f"https://{shop}/admin/api/2024-01/graphql.json",
             headers={
                 "X-Shopify-Access-Token": access_token,
                 "Content-Type": "application/json",
             },
-            params={
-                "status": "any",
-                "limit": 50,
-            },
+            json={"query": query},
         )
 
         if response.status_code != 200:
-            logger.error(f"SHOPIFY SYNC ERROR {response.status_code}: {response.text}")
-            raise HTTPException(
-                status_code=400,
-                detail=f"Shopify API error: {response.text}"
-            )
+            logger.error(f"SHOPIFY GRAPHQL ERROR {response.status_code}: {response.text}")
+            raise HTTPException(status_code=400, detail=f"Shopify API error: {response.text}")
 
         data = response.json()
-        orders = data.get("orders", [])
 
-        logger.info(f"SHOPIFY SYNC shop={shop} orders_found={len(orders)}")
+        if data.get("errors"):
+            logger.error(f"SHOPIFY GRAPHQL ERRORS: {data}")
+            raise HTTPException(status_code=400, detail=f"Shopify GraphQL error: {data['errors']}")
 
+        orders = data.get("data", {}).get("orders", {}).get("edges", [])
         transactions = []
 
-        for order in orders:
+        for edge in orders:
+            order = edge["node"]
             order_id = str(order.get("id"))
 
             existing = table_select_one(
@@ -1740,13 +1756,28 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
             if existing:
                 continue
 
-            total_price = float(order.get("total_price", 0))
+            total_price = float(order["currentTotalPriceSet"]["shopMoney"]["amount"])
 
             transactions.append({
                 "id": str(uuid.uuid4()),
                 "user_id": user["id"],
                 "external_id": order_id,
-                "description": f"Shopify Order #{order.get('name') or order_id}",
+                "description": f"Shopify Order {order.get('name') or order_id}",
+                "amount": total_price,
+                "category": "sales",
+                "date": (order.get("createdAt") or now_iso())[:10],
+                "type": "income",
+                "source": "shopify",
+                "created_at": now_iso()
+            })
+
+        if transactions:
+            table_insert_many("transactions", transactions)
+
+        return {
+            "message": f"Imported {len(transactions)} new Shopify orders",
+            "count": len(transactions)
+        }
                 "amount": total_price,
                 "category": "sales",
                 "date": (order.get("created_at") or now_iso())[:10],
@@ -1931,41 +1962,69 @@ def shopify_callback(code: str, shop: str, state: str):
         raise HTTPException(status_code=400, detail="Failed to get Shopify token")
 
     # ✅ SAVE TO DATABASE
-    existing = table_select_one("integrations", {
-        "user_id": user_id,
-        "platform": "shopify"
-    })
-
-    if existing:
-        table_update(
-            "integrations",
-            {"id": existing["id"]},
-            {
-                "status": "connected",
-                "connected_at": now_iso(),
-                "shop": shop,
-                "access_token": access_token,
+            query = """
+        query GetOrders {
+          orders(first: 20, sortKey: CREATED_AT, reverse: true) {
+            edges {
+              node {
+                id
+                name
+                createdAt
+                currentTotalPriceSet {
+                  shopMoney {
+                    amount
+                  }
+                }
+              }
             }
+          }
+        }
+        """
+
+        response = requests.post(
+            f"https://{shop}/admin/api/2024-01/graphql.json",
+            headers={
+                "X-Shopify-Access-Token": access_token,
+                "Content-Type": "application/json",
+            },
+            json={"query": query},
         )
-    else:
-        table_insert_one(
-            "integrations",
-            {
+
+        if response.status_code != 200:
+            logger.error(f"AUTO SHOPIFY GRAPHQL ERROR {response.status_code}: {response.text}")
+            return
+
+        data = response.json()
+        if data.get("errors"):
+            logger.error(f"AUTO SHOPIFY GRAPHQL ERRORS: {data}")
+            return
+
+        orders = data.get("data", {}).get("orders", {}).get("edges", [])
+
+        for edge in orders:
+            order = edge["node"]
+            order_id = str(order.get("id"))
+
+            existing = table_select_one(
+                "transactions",
+                {"user_id": user_id, "external_id": order_id}
+            )
+
+            if existing:
+                continue
+
+            table_insert_one("transactions", {
                 "id": str(uuid.uuid4()),
                 "user_id": user_id,
-                "platform": "shopify",
-                "status": "connected",
-                "connected_at": now_iso(),
-                "shop": shop,
-                "access_token": access_token,
-            }
-        )
-
-    return RedirectResponse("https://simplifile-ai.vercel.app/integrations")
-
-# ==================== REGISTER ROUTER ====================
-async def auto_sync_shopify(user_id: str):
-    integration = table_select_one("integrations", {
+                "external_id": order_id,
+                "description": f"Shopify Order {order.get('name') or order_id}",
+                "amount": float(order["currentTotalPriceSet"]["shopMoney"]["amount"]),
+                "category": "sales",
+                "date": (order.get("createdAt") or now_iso())[:10],
+                "type": "income",
+                "source": "shopify",
+                "created_at": now_iso()
+            })
         "user_id": user_id,
         "platform": "shopify"
     })
