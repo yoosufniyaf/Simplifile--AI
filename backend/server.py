@@ -1020,7 +1020,7 @@ async def get_plans():
                     "Transaction Categorization",
                     "P&L, Monthly Summary",
                     "MRR, Burn Rate, CAC Insights",
-                    "Auto Integrations (Shopify, PayPal, Whop)",
+                    "Auto Integrations (Shopify, Whop)",
                     "Financial Statements Auto-Generated",
                     "Manual Editing & Custom Entries",
                     "PDF/CSV Export",
@@ -1660,6 +1660,12 @@ async def connect_integration(payload: IntegrationConnect, user: dict = Depends(
                 "connected_at": now_iso(),
             }
         )
+            if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
+            allowed_platforms = {"shopify", "whop"}
+
+    if payload.platform not in allowed_platforms:
+        raise HTTPException(status_code=400, detail="Unsupported integration platform")
     else:
         table_insert_one(
             "integrations",
@@ -1686,6 +1692,12 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
         raise HTTPException(status_code=404, detail="Integration not found")
 
     return {"message": f"{platform} disconnected"}
+        if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
+            allowed_platforms = {"shopify", "whop"}
+
+    if platform not in allowed_platforms:
+        raise HTTPException(status_code=400, detail="Unsupported integration platform")
 
 @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
@@ -1693,6 +1705,10 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
+            allowed_platforms = {"shopify", "whop"}
+
+    if platform not in allowed_platforms:
+        raise HTTPException(status_code=400, detail="Unsupported integration platform")
 
     integration = table_select_one("integrations", {"user_id": user["id"], "platform": platform})
     if not integration:
