@@ -2123,7 +2123,15 @@ async def whop_callback(code: str, state: str):
     if not WHOP_CLIENT_ID or not WHOP_CLIENT_SECRET or not WHOP_OAUTH_REDIRECT_URI:
         raise HTTPException(status_code=500, detail="Whop OAuth not configured")
 
-    user_id = decode_whop_oauth_state(state)
+        user_id = decode_whop_oauth_state(state)
+
+    user = table_select_one("users", {"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    pkce_verifier = user.get("whop_pkce_verifier")
+    if not pkce_verifier:
+        raise HTTPException(status_code=400, detail="Missing PKCE verifier. Start Whop connect again.")
 
     token_response = requests.post(
         "https://api.whop.com/oauth/token",
@@ -2134,6 +2142,7 @@ async def whop_callback(code: str, state: str):
             "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
             "client_id": WHOP_CLIENT_ID,
             "client_secret": WHOP_CLIENT_SECRET,
+            "code_verifier": pkce_verifier,
         },
         timeout=30,
     )
@@ -2161,7 +2170,7 @@ async def whop_callback(code: str, state: str):
         "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
     }
 
-    if existing:
+        if existing:
         table_update("integrations", {"id": existing["id"]}, integration_data)
     else:
         table_insert_one(
@@ -2172,6 +2181,12 @@ async def whop_callback(code: str, state: str):
                 **integration_data,
             }
         )
+
+    table_update(
+        "users",
+        {"id": user_id},
+        {"whop_pkce_verifier": None}
+    )
 
     return RedirectResponse(f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected")
 
