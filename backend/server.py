@@ -691,8 +691,10 @@ def decode_whop_oauth_state(state: str) -> str:
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-    return user_id
-    def get_whop_access_token_for_user(integration: dict) -> str:
+return user_id
+
+
+def get_whop_access_token_for_user(integration: dict) -> str:
     access_token = integration.get("access_token")
     refresh_token = integration.get("refresh_token")
     expires_at = integration.get("token_expires_at")
@@ -1805,92 +1807,7 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         shop = integration.get("shop")
 
         if not access_token or not shop:
-                if platform == "whop":
-        access_token = get_whop_access_token_for_user(integration)
-
-        response = requests.get(
-            "https://api.whop.com/api/v1/payments",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-            params={"first": 100},
-            timeout=30,
-        )
-
-        if response.status_code != 200:
-            raise HTTPException(status_code=400, detail=f"Whop API error: {response.text}")
-
-        payload = response.json()
-        payments = payload.get("data", []) or []
-
-        imported = 0
-
-        for payment in payments:
-            payment_id = payment.get("id")
-            if not payment_id:
-                continue
-
-            existing_tx = table_select_one(
-                "transactions",
-                {"user_id": user["id"], "external_id": payment_id}
-            )
-            if existing_tx:
-                continue
-
-            total = float(payment.get("total") or 0)
-            refunded_amount = float(payment.get("refunded_amount") or 0)
-            created_at_value = payment.get("created_at") or now_iso()
-            product = payment.get("product") or {}
-            product_title = product.get("title") or "Whop Payment"
-
-            if total > 0:
-                table_insert_one(
-                    "transactions",
-                    {
-                        "id": str(uuid.uuid4()),
-                        "user_id": user["id"],
-                        "external_id": payment_id,
-                        "description": f"Whop Payment: {product_title}",
-                        "amount": total,
-                        "category": "sales",
-                        "date": created_at_value[:10],
-                        "type": "income",
-                        "source": "whop",
-                        "created_at": now_iso(),
-                    }
-                )
-                imported += 1
-
-            if refunded_amount > 0:
-                refund_external_id = f"{payment_id}_refund"
-                existing_refund = table_select_one(
-                    "transactions",
-                    {"user_id": user["id"], "external_id": refund_external_id}
-                )
-
-                if not existing_refund:
-                    table_insert_one(
-                        "transactions",
-                        {
-                            "id": str(uuid.uuid4()),
-                            "user_id": user["id"],
-                            "external_id": refund_external_id,
-                            "description": f"Whop Refund: {product_title}",
-                            "amount": -abs(refunded_amount),
-                            "category": "refunds",
-                            "date": created_at_value[:10],
-                            "type": "expense",
-                            "source": "whop_refund",
-                            "created_at": now_iso(),
-                        }
-                    )
-                    imported += 1
-
-        return {
-            "message": f"Imported {imported} Whop transaction rows",
-            "count": imported
-        }
+    raise HTTPException(status_code=400, detail="Shopify not properly connected")
             raise HTTPException(status_code=400, detail="Shopify not properly connected")
 
         query = """
@@ -1965,6 +1882,66 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         return {
             "message": f"Imported {len(transactions)} new Shopify orders",
             "count": len(transactions)
+        }
+            if platform == "whop":
+        access_token = get_whop_access_token_for_user(integration)
+
+        response = requests.get(
+            "https://api.whop.com/api/v1/payments",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            params={"first": 100},
+            timeout=30,
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Whop API error: {response.text}")
+
+        payload = response.json()
+        payments = payload.get("data", []) or []
+
+        imported = 0
+
+        for payment in payments:
+            payment_id = payment.get("id")
+            if not payment_id:
+                continue
+
+            existing_tx = table_select_one(
+                "transactions",
+                {"user_id": user["id"], "external_id": payment_id}
+            )
+            if existing_tx:
+                continue
+
+            total = float(payment.get("total") or 0)
+            created_at_value = payment.get("created_at") or now_iso()
+            product = payment.get("product") or {}
+            product_title = product.get("title") or "Whop Payment"
+
+            if total > 0:
+                table_insert_one(
+                    "transactions",
+                    {
+                        "id": str(uuid.uuid4()),
+                        "user_id": user["id"],
+                        "external_id": payment_id,
+                        "description": f"Whop Payment: {product_title}",
+                        "amount": total,
+                        "category": "sales",
+                        "date": created_at_value[:10],
+                        "type": "income",
+                        "source": "whop",
+                        "created_at": now_iso(),
+                    }
+                )
+                imported += 1
+
+        return {
+            "message": f"Imported {imported} Whop transactions",
+            "count": imported
         }
 
     raise HTTPException(status_code=400, detail=f"Sync not supported yet for {platform}")
@@ -2085,71 +2062,12 @@ async def root():
 @api_router.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": now_iso()}
-    @api_router.get("/integrations/whop/connect")
+@api_router.get("/integrations/whop/connect")
 async def connect_whop(user: dict = Depends(get_current_user)):
-@api_router.get("/integrations/whop/callback")
-async def whop_callback(code: str, state: str):
-    if not WHOP_CLIENT_ID or not WHOP_CLIENT_SECRET or not WHOP_OAUTH_REDIRECT_URI:
-        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
-
-    user_id = decode_whop_oauth_state(state)
-
-    token_response = requests.post(
-        "https://api.whop.com/oauth/token",
-        headers={"Content-Type": "application/json"},
-        json={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
-            "client_id": WHOP_CLIENT_ID,
-            "client_secret": WHOP_CLIENT_SECRET,
-        },
-        timeout=30,
-    )
-
-    if token_response.status_code != 200:
-        raise HTTPException(status_code=400, detail=f"Whop token exchange failed: {token_response.text}")
-
-    token_data = token_response.json()
-
-    access_token = token_data.get("access_token")
-    refresh_token = token_data.get("refresh_token")
-    expires_in = int(token_data.get("expires_in") or 3600)
-
-    if not access_token or not refresh_token:
-        raise HTTPException(status_code=400, detail="Invalid Whop token response")
-
-    existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
-
-    integration_data = {
-        "platform": "whop",
-        "status": "connected",
-        "connected_at": now_iso(),
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
-    }
-
-    if existing:
-        table_update("integrations", {"id": existing["id"]}, integration_data)
-    else:
-        table_insert_one(
-            "integrations",
-            {
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                **integration_data,
-            }
-        )
-
-    return RedirectResponse(f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected")
     require_feature_access(user)
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
-
-    if not WHOP_CLIENT_ID or not WHOP_OAUTH_REDIRECT_URI:
-        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
 
     state = build_whop_oauth_state(user["id"])
 
@@ -2164,6 +2082,41 @@ async def whop_callback(code: str, state: str):
     auth_url = f"https://api.whop.com/oauth/authorize?{urlencode(params)}"
 
     return RedirectResponse(auth_url)
+
+
+@api_router.get("/integrations/whop/callback")
+async def whop_callback(code: str, state: str):
+    user_id = decode_whop_oauth_state(state)
+
+    token_response = requests.post(
+        "https://api.whop.com/oauth/token",
+        headers={"Content-Type": "application/json"},
+        json={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
+            "client_id": WHOP_CLIENT_ID,
+            "client_secret": WHOP_CLIENT_SECRET,
+        },
+    )
+
+    token_data = token_response.json()
+
+    table_insert_one(
+        "integrations",
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "platform": "whop",
+            "status": "connected",
+            "connected_at": now_iso(),
+            "access_token": token_data.get("access_token"),
+            "refresh_token": token_data.get("refresh_token"),
+            "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=3600)).isoformat(),
+        }
+    )
+
+    return RedirectResponse(f"{os.environ.get('FRONTEND_URL')}/integrations")
 
 
 # ==================== SHOPIFY INTEGRATION ====================
