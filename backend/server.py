@@ -2094,7 +2094,7 @@ async def connect_whop(token: str):
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
 
-        state = build_whop_oauth_state(user["id"])
+    state = build_whop_oauth_state(user["id"])
     pkce_verifier = generate_pkce_verifier()
     pkce_challenge = generate_pkce_challenge(pkce_verifier)
 
