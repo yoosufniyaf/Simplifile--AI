@@ -2082,7 +2082,6 @@ async def connect_whop(user: dict = Depends(get_current_user)):
     }
 
     auth_url = f"https://api.whop.com/oauth/authorize?{urlencode(params)}"
-
     return RedirectResponse(auth_url)
 
 
@@ -2103,19 +2102,30 @@ async def whop_callback(code: str, state: str):
             "client_id": WHOP_CLIENT_ID,
             "client_secret": WHOP_CLIENT_SECRET,
         },
+        timeout=30,
     )
+
+    if token_response.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Whop token exchange failed: {token_response.text}")
 
     token_data = token_response.json()
 
-        existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    expires_in = int(token_data.get("expires_in") or 3600)
+
+    if not access_token or not refresh_token:
+        raise HTTPException(status_code=400, detail="Invalid Whop token response")
+
+    existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
 
     integration_data = {
         "platform": "whop",
         "status": "connected",
         "connected_at": now_iso(),
-        "access_token": token_data.get("access_token"),
-        "refresh_token": token_data.get("refresh_token"),
-        "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=3600)).isoformat(),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
     }
 
     if existing:
@@ -2130,7 +2140,7 @@ async def whop_callback(code: str, state: str):
             }
         )
 
-    return RedirectResponse(f"{os.environ.get('FRONTEND_URL')}/integrations")
+    return RedirectResponse(f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected")
 
 
 # ==================== SHOPIFY INTEGRATION ====================
