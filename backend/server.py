@@ -2062,14 +2062,28 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": now_iso()}
 @api_router.get("/integrations/whop/connect")
-async def connect_whop(user: dict = Depends(get_current_user)):
+async def connect_whop(token: str):
+    if not WHOP_CLIENT_ID or not WHOP_OAUTH_REDIRECT_URI:
+        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = str(payload.get("sub") or "").strip()
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = table_select_one("users", {"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user = await normalize_user_access(user)
     require_feature_access(user)
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
-
-    if not WHOP_CLIENT_ID or not WHOP_OAUTH_REDIRECT_URI:
-        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
 
     state = build_whop_oauth_state(user["id"])
 
