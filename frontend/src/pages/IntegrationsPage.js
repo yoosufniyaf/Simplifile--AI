@@ -121,7 +121,7 @@ const IntegrationsPage = () => {
       return;
     }
     if (selectedPlatform === "whop") {
-  window.location.href = `${API}/integrations/whop/connect`;
+  window.location.href = `${API}/integrations/whop/connect?token=${encodeURIComponent(token)}`;
   return;
 }
 
