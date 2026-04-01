@@ -2130,7 +2130,7 @@ async def whop_callback(code: str, state: str):
     if not WHOP_CLIENT_ID or not WHOP_CLIENT_SECRET or not WHOP_OAUTH_REDIRECT_URI:
         raise HTTPException(status_code=500, detail="Whop OAuth not configured")
 
-        user_id = decode_whop_oauth_state(state)
+    user_id = decode_whop_oauth_state(state)
 
     user = table_select_one("users", {"id": user_id})
     if not user:
@@ -2168,8 +2168,6 @@ async def whop_callback(code: str, state: str):
 
     existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
 
-    existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
-
     integration_data = {
         "platform": "whop",
         "status": "connected",
@@ -2191,7 +2189,7 @@ async def whop_callback(code: str, state: str):
             }
         )
 
-        table_update(
+    table_update(
         "users",
         {"id": user_id},
         {
