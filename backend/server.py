@@ -696,6 +696,8 @@ def decode_whop_oauth_state(state: str) -> str:
     return user_id
 def generate_pkce_verifier() -> str:
     return secrets.token_urlsafe(64)
+def generate_oauth_nonce() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def generate_pkce_challenge(verifier: str) -> str:
@@ -2094,14 +2096,18 @@ async def connect_whop(token: str):
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
 
-    state = build_whop_oauth_state(user["id"])
+        state = build_whop_oauth_state(user["id"])
     pkce_verifier = generate_pkce_verifier()
     pkce_challenge = generate_pkce_challenge(pkce_verifier)
+    nonce = generate_oauth_nonce()
 
     table_update(
         "users",
         {"id": user["id"]},
-        {"whop_pkce_verifier": pkce_verifier}
+        {
+            "whop_pkce_verifier": pkce_verifier,
+            "whop_oauth_nonce": nonce,
+        }
     )
 
     params = {
@@ -2110,6 +2116,7 @@ async def connect_whop(token: str):
         "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
         "scope": whop_required_scopes(),
         "state": state,
+        "nonce": nonce,
         "code_challenge": pkce_challenge,
         "code_challenge_method": "S256",
     }
@@ -2184,10 +2191,13 @@ async def whop_callback(code: str, state: str):
             }
         )
 
-    table_update(
+        table_update(
         "users",
         {"id": user_id},
-        {"whop_pkce_verifier": None}
+        {
+            "whop_pkce_verifier": None,
+            "whop_oauth_nonce": None,
+        }
     )
 
     return RedirectResponse(
