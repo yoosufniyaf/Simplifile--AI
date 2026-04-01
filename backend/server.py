@@ -21,6 +21,8 @@ import json
 import base64
 import io
 import csv
+import secrets
+import urllib.parse
 
 from urllib.parse import urlencode
 from supabase import create_client, Client
@@ -692,6 +694,13 @@ def decode_whop_oauth_state(state: str) -> str:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     return user_id
+def generate_pkce_verifier() -> str:
+    return secrets.token_urlsafe(64)
+
+
+def generate_pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
 
 
 def get_whop_access_token_for_user(integration: dict) -> str:
@@ -2085,7 +2094,15 @@ async def connect_whop(token: str):
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
 
-    state = build_whop_oauth_state(user["id"])
+        state = build_whop_oauth_state(user["id"])
+    pkce_verifier = generate_pkce_verifier()
+    pkce_challenge = generate_pkce_challenge(pkce_verifier)
+
+    table_update(
+        "users",
+        {"id": user["id"]},
+        {"whop_pkce_verifier": pkce_verifier}
+    )
 
     params = {
         "response_type": "code",
@@ -2093,6 +2110,8 @@ async def connect_whop(token: str):
         "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
         "scope": whop_required_scopes(),
         "state": state,
+        "code_challenge": pkce_challenge,
+        "code_challenge_method": "S256",
     }
 
     auth_url = f"https://api.whop.com/oauth/authorize?{urlencode(params)}"
