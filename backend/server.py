@@ -2161,7 +2161,7 @@ async def whop_callback(code: str, state: str):
 
     existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
 
-        existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
+    existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
 
     integration_data = {
         "platform": "whop",
