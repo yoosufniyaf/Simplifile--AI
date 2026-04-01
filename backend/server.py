@@ -22,6 +22,7 @@ import base64
 import io
 import csv
 
+from urllib.parse import urlencode
 from supabase import create_client, Client
 from openai import OpenAI
 from google import genai
@@ -41,6 +42,9 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-placeholder-key")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 WHOP_API_KEY = os.environ.get("WHOP_API_KEY", "")
 WHOP_WEBHOOK_KEY = os.environ.get("WHOP_WEBHOOK_KEY", "")
+WHOP_CLIENT_ID = os.environ.get("WHOP_CLIENT_ID", "")
+WHOP_CLIENT_SECRET = os.environ.get("WHOP_CLIENT_SECRET", "")
+WHOP_OAUTH_REDIRECT_URI = os.environ.get("WHOP_OAUTH_REDIRECT_URI", "")
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
@@ -663,6 +667,31 @@ def infer_billing_from_text(*values) -> str:
     if "annual" in combined or "yearly" in combined or "year" in combined:
         return "annual"
     return "monthly"
+
+def whop_required_scopes() -> str:
+    return "openid profile email payment:basic:read"
+
+
+def build_whop_oauth_state(user_id: str) -> str:
+    payload = {
+        "sub": user_id,
+        "type": "whop_oauth",
+        "iat": datetime.now(timezone.utc).timestamp(),
+        "exp": (datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp(),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_whop_oauth_state(state: str) -> str:
+    payload = jwt.decode(state, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    if payload.get("type") != "whop_oauth":
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    user_id = str(payload.get("sub") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    return user_id
 
 async def normalize_user_access(user: dict) -> dict:
     updated_fields = {}
@@ -1915,6 +1944,85 @@ async def root():
 @api_router.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": now_iso()}
+    @api_router.get("/integrations/whop/connect")
+async def connect_whop(user: dict = Depends(get_current_user)):
+@api_router.get("/integrations/whop/callback")
+async def whop_callback(code: str, state: str):
+    if not WHOP_CLIENT_ID or not WHOP_CLIENT_SECRET or not WHOP_OAUTH_REDIRECT_URI:
+        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
+
+    user_id = decode_whop_oauth_state(state)
+
+    token_response = requests.post(
+        "https://api.whop.com/oauth/token",
+        headers={"Content-Type": "application/json"},
+        json={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
+            "client_id": WHOP_CLIENT_ID,
+            "client_secret": WHOP_CLIENT_SECRET,
+        },
+        timeout=30,
+    )
+
+    if token_response.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Whop token exchange failed: {token_response.text}")
+
+    token_data = token_response.json()
+
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    expires_in = int(token_data.get("expires_in") or 3600)
+
+    if not access_token or not refresh_token:
+        raise HTTPException(status_code=400, detail="Invalid Whop token response")
+
+    existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
+
+    integration_data = {
+        "platform": "whop",
+        "status": "connected",
+        "connected_at": now_iso(),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
+    }
+
+    if existing:
+        table_update("integrations", {"id": existing["id"]}, integration_data)
+    else:
+        table_insert_one(
+            "integrations",
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                **integration_data,
+            }
+        )
+
+    return RedirectResponse(f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected")
+    require_feature_access(user)
+
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
+
+    if not WHOP_CLIENT_ID or not WHOP_OAUTH_REDIRECT_URI:
+        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
+
+    state = build_whop_oauth_state(user["id"])
+
+    params = {
+        "response_type": "code",
+        "client_id": WHOP_CLIENT_ID,
+        "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
+        "scope": whop_required_scopes(),
+        "state": state,
+    }
+
+    auth_url = f"https://api.whop.com/oauth/authorize?{urlencode(params)}"
+
+    return RedirectResponse(auth_url)
 
 
 # ==================== SHOPIFY INTEGRATION ====================
