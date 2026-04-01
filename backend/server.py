@@ -2199,8 +2199,8 @@ async def whop_callback(code: str, state: str):
     )
 
     return RedirectResponse(
-        f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected"
-    )
+    f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected"
+)
 
 
 # ==================== SHOPIFY INTEGRATION ====================
