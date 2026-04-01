@@ -691,7 +691,7 @@ def decode_whop_oauth_state(state: str) -> str:
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-return user_id
+    return user_id
 
 
 def get_whop_access_token_for_user(integration: dict) -> str:
@@ -1785,7 +1785,6 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
 
     return {"message": f"{platform} disconnected"}
 
-
 @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1807,7 +1806,6 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         shop = integration.get("shop")
 
         if not access_token or not shop:
-    raise HTTPException(status_code=400, detail="Shopify not properly connected")
             raise HTTPException(status_code=400, detail="Shopify not properly connected")
 
         query = """
@@ -1883,7 +1881,8 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
             "message": f"Imported {len(transactions)} new Shopify orders",
             "count": len(transactions)
         }
-            if platform == "whop":
+
+    if platform == "whop":
         access_token = get_whop_access_token_for_user(integration)
 
         response = requests.get(
@@ -2069,6 +2068,9 @@ async def connect_whop(user: dict = Depends(get_current_user)):
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
 
+    if not WHOP_CLIENT_ID or not WHOP_OAUTH_REDIRECT_URI:
+        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
+
     state = build_whop_oauth_state(user["id"])
 
     params = {
@@ -2086,6 +2088,9 @@ async def connect_whop(user: dict = Depends(get_current_user)):
 
 @api_router.get("/integrations/whop/callback")
 async def whop_callback(code: str, state: str):
+    if not WHOP_CLIENT_ID or not WHOP_CLIENT_SECRET or not WHOP_OAUTH_REDIRECT_URI:
+        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
+
     user_id = decode_whop_oauth_state(state)
 
     token_response = requests.post(
@@ -2102,19 +2107,28 @@ async def whop_callback(code: str, state: str):
 
     token_data = token_response.json()
 
-    table_insert_one(
-        "integrations",
-        {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "platform": "whop",
-            "status": "connected",
-            "connected_at": now_iso(),
-            "access_token": token_data.get("access_token"),
-            "refresh_token": token_data.get("refresh_token"),
-            "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=3600)).isoformat(),
-        }
-    )
+        existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
+
+    integration_data = {
+        "platform": "whop",
+        "status": "connected",
+        "connected_at": now_iso(),
+        "access_token": token_data.get("access_token"),
+        "refresh_token": token_data.get("refresh_token"),
+        "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=3600)).isoformat(),
+    }
+
+    if existing:
+        table_update("integrations", {"id": existing["id"]}, integration_data)
+    else:
+        table_insert_one(
+            "integrations",
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                **integration_data,
+            }
+        )
 
     return RedirectResponse(f"{os.environ.get('FRONTEND_URL')}/integrations")
 
