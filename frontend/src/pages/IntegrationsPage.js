@@ -120,6 +120,10 @@ const IntegrationsPage = () => {
       handleShopifyConnect();
       return;
     }
+    if (selectedPlatform === "whop") {
+  window.location.href = `${API}/integrations/whop/connect`;
+  return;
+}
 
     setConnecting(true);
 
