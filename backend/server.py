@@ -2161,6 +2161,8 @@ async def whop_callback(code: str, state: str):
 
     existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
 
+        existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
+
     integration_data = {
         "platform": "whop",
         "status": "connected",
@@ -2170,7 +2172,7 @@ async def whop_callback(code: str, state: str):
         "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
     }
 
-        if existing:
+    if existing:
         table_update("integrations", {"id": existing["id"]}, integration_data)
     else:
         table_insert_one(
@@ -2188,7 +2190,9 @@ async def whop_callback(code: str, state: str):
         {"whop_pkce_verifier": None}
     )
 
-    return RedirectResponse(f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected")
+    return RedirectResponse(
+        f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/integrations?whop=connected"
+    )
 
 
 # ==================== SHOPIFY INTEGRATION ====================
