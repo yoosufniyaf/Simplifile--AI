@@ -107,16 +107,24 @@ const ReportsPage = () => {
   }, [fetchReports]);
 
   const handleExport = async (reportType, format) => {
-    try {
-      const response = await axios.get(
-        `${API}/reports/export/${reportType}?format=${format}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+  try {
+    if (format === "pdf") {
+      window.open(
+        `${API}/reports/export/${reportType}?format=pdf&token=${token}`,
+        "_blank"
       );
-      toast.success(response.data.message || "Export generated");
-    } catch (error) {
-      toast.error("Export failed. Please try again.");
+      return;
     }
-  };
+
+    const response = await axios.get(
+      `${API}/reports/export/${reportType}?format=${format}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    toast.success(response.data.message || "Export generated");
+  } catch (error) {
+    toast.error("Export failed. Please try again.");
+  }
+};
 
   const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
