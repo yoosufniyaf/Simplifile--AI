@@ -107,46 +107,34 @@ const ReportsPage = () => {
   }, [fetchReports]);
 
   const handleExport = async (reportType, format) => {
-  try {
-    const handleExport = async (reportType, format) => {
-  try {
-    const response = await axios.get(
-      `${API}/reports/export/${reportType}?format=${format}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: "blob",
-      }
-    );
+    try {
+      const response = await axios.get(
+        `${API}/reports/export/${reportType}?format=${format}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: "blob",
+        }
+      );
 
-    const blob = new Blob([response.data], {
-      type: format === "pdf" ? "application/pdf" : "text/csv",
-    });
+      const blob = new Blob([response.data], {
+        type: format === "pdf" ? "application/pdf" : "text/csv",
+      });
 
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${reportType}.${format}`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${reportType}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
 
-    toast.success(`${reportType} report exported as ${format.toUpperCase()}`);
-  } catch (error) {
-    console.error("Export failed:", error);
-    toast.error("Export failed. Please try again.");
-  }
-};
-
-    const response = await axios.get(
-      `${API}/reports/export/${reportType}?format=${format}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    toast.success(response.data.message || "Export generated");
-  } catch (error) {
-    toast.error("Export failed. Please try again.");
-  }
-};
+      toast.success(`${reportType} report exported as ${format.toUpperCase()}`);
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast.error("Export failed. Please try again.");
+    }
+  };
 
   const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
