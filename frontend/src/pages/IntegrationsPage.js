@@ -294,7 +294,7 @@ const IntegrationsPage = () => {
 
               <CardContent className="flex flex-wrap gap-3">
                 {!isConnected && !isReconnectRequired ? (
-                  <Button onClick={() => handleDisconnect(integration.platform)}
+                  <Button onClick={() => openConnectDialog(integration.platform)}>
                     Connect {info.name}
                   </Button>
                 ) : (
@@ -315,15 +315,15 @@ const IntegrationsPage = () => {
                     </Button>
 
                     <Button
-  variant={isReconnectRequired ? "default" : "destructive"}
-  onClick={() =>
-    isReconnectRequired
-      ? openConnectDialog(integration.platform)
-      : handleDisconnect(integration.platform)
-  }
->
-  {isReconnectRequired ? `Reconnect ${info.name}` : "Disconnect"}
-</Button>
+                      variant={isReconnectRequired ? "default" : "destructive"}
+                      onClick={() =>
+                        isReconnectRequired
+                          ? openConnectDialog(integration.platform)
+                          : handleDisconnect(integration.platform)
+                      }
+                    >
+                      {isReconnectRequired ? `Reconnect ${info.name}` : "Disconnect"}
+                    </Button>
                   </>
                 )}
               </CardContent>
