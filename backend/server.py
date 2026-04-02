@@ -1854,6 +1854,56 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     if format == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
+
+        writer.writerow(["Report Type", report.report_type])
+        writer.writerow(["Period", report.period])
+        writer.writerow(["Generated At", report.generated_at])
+        writer.writerow([])
+
+        for key, value in report.data.items():
+            if isinstance(value, dict):
+                writer.writerow([key.upper()])
+                for sub_key, sub_value in value.items():
+                    writer.writerow([sub_key, sub_value])
+                writer.writerow([])
+            else:
+                writer.writerow([key, value])
+
+        csv_bytes = io.BytesIO(output.getvalue().encode("utf-8"))
+        return StreamingResponse(
+            csv_bytes,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{report_type}.csv"'}
+        )
+
+    pdf_text = f"""SIMPLIFILE AI FINANCIAL REPORT
+
+Report Type: {report.report_type}
+Period: {report.period}
+Generated At: {report.generated_at}
+
+REPORT DATA
+{json.dumps(report.data, indent=2)}
+"""
+
+    pdf_bytes = io.BytesIO(pdf_text.encode("utf-8"))
+    return StreamingResponse(
+        pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{report_type}.pdf"'}
+    )
+
+    report_map = {
+        "profit-loss": await profit_loss_report(user),
+        "balance-sheet": await balance_sheet_report(user),
+        "cash-flow": await cash_flow_report(user),
+    }
+
+    report = report_map[report_type]
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
         writer.writerow(["Report Type", report["report_type"]])
         writer.writerow(["Period", report["period"]])
         writer.writerow(["Generated At", report["generated_at"]])
