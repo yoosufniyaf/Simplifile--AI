@@ -521,6 +521,12 @@ const BookkeepingPage = () => {
         </Badge>
       )}
 
+      {trans.source === "whop" && (
+  <Badge className="inline-flex items-center gap-1 bg-orange-500/20 text-orange-400 border-orange-500/30">
+    Whop
+  </Badge>
+)}
+
       {(!trans.source || trans.source === "manual") && (
         <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">
           Manual
