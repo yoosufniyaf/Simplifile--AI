@@ -487,6 +487,8 @@ class UserResponse(BaseModel):
     created_at: str
     whop_manage_url: Optional[str] = None
     whop_membership_id: Optional[str] = None
+    onboarding_completed: bool = False
+    onboarding_step: int = 1
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -503,6 +505,10 @@ class ActivateSubscriptionRequest(BaseModel):
     billing: Optional[str] = "monthly"
     payment_id: Optional[str] = None
 
+class OnboardingUpdateRequest(BaseModel):
+    onboarding_step: int
+    onboarding_completed: bool = False
+    
 class DocumentResponse(BaseModel):
     id: str
     name: str
@@ -840,6 +846,8 @@ def to_user_response(user: dict) -> UserResponse:
         created_at=user["created_at"],
         whop_manage_url=user.get("whop_manage_url"),
         whop_membership_id=user.get("whop_membership_id")
+        onboarding_completed=user.get("onboarding_completed", False),
+        onboarding_step=user.get("onboarding_step", 1)
     )
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -996,6 +1004,51 @@ async def reset_password(payload: ResetPasswordRequest):
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
     return to_user_response(user)
+
+@api_router.put("/api/onboarding")
+async def update_onboarding(
+    payload: OnboardingUpdateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["id"]
+
+    try:
+        table_update(
+            "users",
+            {"id": user_id},
+            {
+                "onboarding_step": payload.onboarding_step,
+                "onboarding_completed": payload.onboarding_completed
+            }
+        )
+
+        logger.info(
+            f"Onboarding updated | user_id={user_id} | step={payload.onboarding_step} | completed={payload.onboarding_completed}"
+        )
+
+        create_log(
+            action="onboarding_update",
+            status="success",
+            user_id=user_id,
+            message=f"Step {payload.onboarding_step}"
+        )
+
+        return {"success": True}
+
+    except Exception as e:
+        logger.error(
+            f"Onboarding update failed | user_id={user_id} | error={str(e)}",
+            exc_info=True
+        )
+
+        create_log(
+            action="onboarding_update",
+            status="failed",
+            user_id=user_id,
+            message=str(e)
+        )
+
+        raise HTTPException(status_code=500, detail="Failed to update onboarding")
 
 @api_router.delete("/auth/delete-account")
 async def delete_account(user: dict = Depends(get_current_user)):
