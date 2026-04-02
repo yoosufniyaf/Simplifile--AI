@@ -1852,8 +1852,8 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     }
 
     report = report_map[report_type]
-
-        if format == "csv":
+    
+if format == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
 
