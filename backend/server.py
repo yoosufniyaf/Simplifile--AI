@@ -1854,22 +1854,62 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     report = report_map[report_type]
 
     if format == "csv":
-        output = io.StringIO()
+                output = io.StringIO()
         writer = csv.writer(output)
 
-        writer.writerow(["Report Type", report.report_type])
-        writer.writerow(["Period", report.period])
+        def money_csv(value):
+            try:
+                return f"{float(value):,.2f}"
+            except Exception:
+                return "0.00"
+
+        def pretty_csv_label(text):
+            text = str(text).replace("_", " ").replace("-", " ").strip().title()
+            if text == "Profit Loss":
+                return "Profit & Loss"
+            if text == "Cash Flow":
+                return "Cash Flow"
+            if text == "Balance Sheet":
+                return "Balance Sheet"
+            return text
+
+        writer.writerow(["SIMPLIFILE AI"])
+        writer.writerow(["Financial Report"])
+        writer.writerow([])
+
+        writer.writerow(["Report Type", pretty_csv_label(report.report_type)])
+        writer.writerow(["Period", pretty_csv_label(report.period)])
         writer.writerow(["Generated At", report.generated_at])
         writer.writerow([])
 
-        for key, value in report.data.items():
-            if isinstance(value, dict):
-                writer.writerow([key.upper()])
-                for sub_key, sub_value in value.items():
-                    writer.writerow([sub_key, sub_value])
+        writer.writerow(["Summary"])
+        writer.writerow(["Item", "Amount"])
+
+        data = report.data
+
+        if report.report_type == "profit-loss":
+            writer.writerow(["Revenue", money_csv(data.get("revenue", 0))])
+            writer.writerow(["Total Expenses", money_csv(data.get("total_expenses", 0))])
+            writer.writerow(["Net Income", money_csv(data.get("net_income", 0))])
+
+        elif report.report_type == "balance-sheet":
+            writer.writerow(["Total Assets", money_csv(data.get("total_assets", 0))])
+            writer.writerow(["Total Liabilities", money_csv(data.get("total_liabilities", 0))])
+            writer.writerow(["Equity", money_csv(data.get("equity", 0))])
+
+        elif report.report_type == "cash-flow":
+            writer.writerow(["Cash In", money_csv(data.get("cash_in", 0))])
+            writer.writerow(["Cash Out", money_csv(data.get("cash_out", 0))])
+            writer.writerow(["Net Cash Flow", money_csv(data.get("net_cash_flow", 0))])
+
+        for key, value in data.items():
+            if isinstance(value, dict) and value:
                 writer.writerow([])
-            else:
-                writer.writerow([key, value])
+                writer.writerow([pretty_csv_label(key)])
+                writer.writerow(["Item", "Amount"])
+
+                for sub_key, sub_value in value.items():
+                    writer.writerow([pretty_csv_label(sub_key), money_csv(sub_value)])
 
         csv_bytes = io.BytesIO(output.getvalue().encode("utf-8"))
         return StreamingResponse(
