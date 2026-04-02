@@ -23,6 +23,28 @@ import io
 import csv
 import secrets
 import urllib.parse
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+
+logger = logging.getLogger("simplifile")
+
+def create_log(action, status, user_id=None, provider=None, message=None):
+    try:
+        supabase.table("app_logs").insert({
+            "user_id": user_id,
+            "action": action,
+            "status": status,
+            "provider": provider,
+            "message": message,
+        }).execute()
+    except Exception as e:
+        logger.error(f"Failed to write app log: {str(e)}")
 
 from urllib.parse import urlencode
 from supabase import create_client, Client
