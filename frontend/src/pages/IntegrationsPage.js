@@ -320,7 +320,6 @@ const IntegrationsPage = () => {
                     >
                       {isReconnectRequired ? `Reconnect ${info.name}` : "Disconnect"}
                     </Button>
-
                   </>
                 )}
               </CardContent>
