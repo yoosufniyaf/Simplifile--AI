@@ -43,7 +43,6 @@ const ProtectedRoute = ({ children }) => {
     return <LoadingScreen />;
   }
 
-  // 🔥 ADD THIS (onboarding check)
   if (!user.onboarding_completed) {
     return <Navigate to="/onboarding" replace />;
   }
@@ -56,6 +55,28 @@ const ProtectedRoute = ({ children }) => {
   }
 
   return children;
+};
+
+const OnboardingRoute = () => {
+  const { user, loading, token } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user) {
+    return <LoadingScreen />;
+  }
+
+  if (user.onboarding_completed) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <OnboardingPage />;
 };
 
 const PlanProtectedRoute = ({ children, requiredPlan = "basic" }) => {
@@ -73,6 +94,10 @@ const PlanProtectedRoute = ({ children, requiredPlan = "basic" }) => {
     return <LoadingScreen />;
   }
 
+  if (!user.onboarding_completed) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   if (
     user.subscription_status !== "trial" &&
     user.subscription_status !== "active"
@@ -87,94 +112,92 @@ const PlanProtectedRoute = ({ children, requiredPlan = "basic" }) => {
   return children;
 };
 
-function App() {
+const AppRoutes = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
 
-          {/* 🔥 NEW ONBOARDING ROUTE */}
+        <Route path="/onboarding" element={<OnboardingRoute />} />
+
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
+          <Route path="chat" element={<ChatPage />} />
+
           <Route
-            path="/onboarding"
+            path="bookkeeping"
             element={
-              <ProtectedRoute>
-                <OnboardingPage />
-              </ProtectedRoute>
+              <PlanProtectedRoute requiredPlan="premium">
+                <BookkeepingPage />
+              </PlanProtectedRoute>
             }
           />
 
           <Route
-            path="/dashboard"
+            path="reports"
             element={
-              <ProtectedRoute>
-                <DashboardLayout />
-              </ProtectedRoute>
+              <PlanProtectedRoute requiredPlan="premium">
+                <ReportsPage />
+              </PlanProtectedRoute>
             }
-          >
-            <Route index element={<DashboardPage />} />
-            <Route path="documents" element={<DocumentsPage />} />
-            <Route path="chat" element={<ChatPage />} />
+          />
 
-            <Route
-              path="bookkeeping"
-              element={
-                <PlanProtectedRoute requiredPlan="premium">
-                  <BookkeepingPage />
-                </PlanProtectedRoute>
-              }
-            />
+          <Route
+            path="integrations"
+            element={
+              <PlanProtectedRoute requiredPlan="premium">
+                <IntegrationsPage />
+              </PlanProtectedRoute>
+            }
+          />
 
-            <Route
-              path="reports"
-              element={
-                <PlanProtectedRoute requiredPlan="premium">
-                  <ReportsPage />
-                </PlanProtectedRoute>
-              }
-            />
+          <Route
+            path="tax-insights"
+            element={
+              <PlanProtectedRoute requiredPlan="premium">
+                <TaxInsightsPage />
+              </PlanProtectedRoute>
+            }
+          />
 
-            <Route
-              path="integrations"
-              element={
-                <PlanProtectedRoute requiredPlan="premium">
-                  <IntegrationsPage />
-                </PlanProtectedRoute>
-              }
-            />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
 
-            <Route
-              path="tax-insights"
-              element={
-                <PlanProtectedRoute requiredPlan="premium">
-                  <TaxInsightsPage />
-                </PlanProtectedRoute>
-              }
-            />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: "hsl(240 10% 7%)",
+            border: "1px solid hsl(240 5% 17%)",
+            color: "hsl(0 0% 98%)",
+          },
+        }}
+      />
+    </BrowserRouter>
+  );
+};
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: {
-              background: "hsl(240 10% 7%)",
-              border: "1px solid hsl(240 5% 17%)",
-              color: "hsl(0 0% 98%)",
-            },
-          }}
-        />
-      </BrowserRouter>
+function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
     </AuthProvider>
   );
 }
