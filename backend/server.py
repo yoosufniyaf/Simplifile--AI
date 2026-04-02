@@ -1853,8 +1853,8 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
 
     report = report_map[report_type]
 
-    if format == "csv":
-                output = io.StringIO()
+        if format == "csv":
+        output = io.StringIO()
         writer = csv.writer(output)
 
         def money_csv(value):
@@ -1917,8 +1917,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename=\"{report_type}.csv\"'}
         )
-
-    pdf_buffer = io.BytesIO()
     pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
     width, height = letter
 
