@@ -1878,7 +1878,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
             headers={"Content-Disposition": f'attachment; filename="{report_type}.csv"'}
         )
 
-        pdf_buffer = io.BytesIO()
+    pdf_buffer = io.BytesIO()
     pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
     width, height = letter
 
