@@ -18,6 +18,7 @@ import IntegrationsPage from "./pages/IntegrationsPage";
 import TaxInsightsPage from "./pages/TaxInsightsPage";
 import SettingsPage from "./pages/SettingsPage";
 import PricingPage from "./pages/PricingPage";
+import OnboardingPage from "./pages/OnboardingPage";
 
 const LoadingScreen = () => {
   return (
