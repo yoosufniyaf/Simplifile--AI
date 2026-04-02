@@ -321,14 +321,6 @@ const IntegrationsPage = () => {
                       {isReconnectRequired ? `Reconnect ${info.name}` : "Disconnect"}
                     </Button>
 
-                    {!isReconnectRequired && (
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleDisconnect(integration.platform)}
-                      >
-                        Disconnect
-                      </Button>
-                    )}
                   </>
                 )}
               </CardContent>
