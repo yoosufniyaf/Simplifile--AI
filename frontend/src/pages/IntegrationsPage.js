@@ -120,10 +120,11 @@ const IntegrationsPage = () => {
       handleShopifyConnect();
       return;
     }
+
     if (selectedPlatform === "whop") {
-  window.location.href = `${API}/integrations/whop/connect?token=${encodeURIComponent(token)}`;
-  return;
-}
+      window.location.href = `${API}/integrations/whop/connect?token=${encodeURIComponent(token)}`;
+      return;
+    }
 
     setConnecting(true);
 
@@ -169,8 +170,33 @@ const IntegrationsPage = () => {
       );
 
       toast.success(response.data.message || "Sync complete");
+
+      setIntegrations((prev) =>
+        prev.map((item) =>
+          item.platform === platform
+            ? { ...item, status: "connected" }
+            : item
+        )
+      );
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Sync failed");
+      const detail =
+        error?.response?.data?.detail || "Sync failed. Please try again.";
+
+      toast.error(detail);
+
+      if (
+        detail.toLowerCase().includes("reconnect") ||
+        detail.toLowerCase().includes("expired") ||
+        detail.toLowerCase().includes("not properly connected")
+      ) {
+        setIntegrations((prev) =>
+          prev.map((item) =>
+            item.platform === platform
+              ? { ...item, status: "reconnect_required" }
+              : item
+          )
+        );
+      }
     } finally {
       setSyncing(null);
     }
@@ -232,6 +258,7 @@ const IntegrationsPage = () => {
         {integrations.map((integration) => {
           const info = PLATFORM_INFO[integration.platform];
           const isConnected = integration.status === "connected";
+          const isReconnectRequired = integration.status === "reconnect_required";
           const isSyncing = syncing === integration.platform;
 
           return (
@@ -253,14 +280,20 @@ const IntegrationsPage = () => {
                     </div>
                   </div>
 
-                  <Badge variant={isConnected ? "default" : "secondary"}>
-                    {isConnected ? "Connected" : "Not Connected"}
-                  </Badge>
+                  {isReconnectRequired ? (
+                    <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+                      Reconnect Required
+                    </Badge>
+                  ) : (
+                    <Badge variant={isConnected ? "default" : "secondary"}>
+                      {isConnected ? "Connected" : "Not Connected"}
+                    </Badge>
+                  )}
                 </div>
               </CardHeader>
 
               <CardContent className="flex flex-wrap gap-3">
-                {!isConnected ? (
+                {!isConnected && !isReconnectRequired ? (
                   <Button onClick={() => openConnectDialog(integration.platform)}>
                     Connect {info.name}
                   </Button>
@@ -282,11 +315,20 @@ const IntegrationsPage = () => {
                     </Button>
 
                     <Button
-                      variant="destructive"
-                      onClick={() => handleDisconnect(integration.platform)}
+                      variant={isReconnectRequired ? "default" : "destructive"}
+                      onClick={() => openConnectDialog(integration.platform)}
                     >
-                      Disconnect
+                      {isReconnectRequired ? `Reconnect ${info.name}` : "Disconnect"}
                     </Button>
+
+                    {!isReconnectRequired && (
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleDisconnect(integration.platform)}
+                      >
+                        Disconnect
+                      </Button>
+                    )}
                   </>
                 )}
               </CardContent>
