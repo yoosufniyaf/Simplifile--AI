@@ -876,9 +876,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
     email = normalize_email(user_data.email)
+    logger.info(f"Register attempt | email={email}")
+    email = normalize_email(user_data.email)
     existing = table_select_one("users", {"email": email})
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    logger.warning(f"Register failed | email={email} | reason=already_exists")
+    create_log("register", "failed", user_id=existing["id"], message=f"email={email} reason=already_exists")
+    raise HTTPException(status_code=400, detail="Email already registered")
 
     user_id = str(uuid.uuid4())
     user_doc = {
@@ -897,6 +901,9 @@ async def register(user_data: UserCreate):
     table_insert_one("users", user_doc)
     token = create_token(user_id)
 
+    logger.info(f"Register successful | user_id={user_id} | email={email}")
+    create_log("register", "success", user_id=user_id, message=f"email={email}")
+
     return TokenResponse(
         access_token=token,
         user=to_user_response(user_doc)
@@ -905,16 +912,25 @@ async def register(user_data: UserCreate):
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
     email = normalize_email(credentials.email)
+    logger.info(f"Login attempt | email={email}")
+    email = normalize_email(credentials.email)
     user = table_select_one("users", {"email": email})
 
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    logger.warning(f"Login failed | email={email} | reason=user_not_found")
+    create_log("login", "failed", message=f"email={email} reason=user_not_found")
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    if not verify_password(credentials.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+if not verify_password(credentials.password, user["password_hash"]):
+    logger.warning(f"Login failed | email={email} | reason=bad_password")
+    create_log("login", "failed", user_id=user["id"], message=f"email={email} reason=bad_password")
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user = await normalize_user_access(user)
     token = create_token(user["id"])
+
+    logger.info(f"Login successful | user_id={user['id']} | email={email}")
+    create_log("login", "success", user_id=user["id"], message=f"email={email}")
 
     return TokenResponse(
         access_token=token,
@@ -1209,6 +1225,7 @@ async def get_plans():
 @api_router.post("/webhook/whop")
 async def whop_webhook(request: Request):
     try:
+        logger.info("Whop webhook received")
         raw_body = await request.body()
         request_body_text = raw_body.decode("utf-8")
         headers = dict(request.headers)
@@ -1220,6 +1237,7 @@ async def whop_webhook(request: Request):
         logger.info(f"Verified Whop webhook: {webhook_data}")
 
         event_type = str(webhook_data.get("type") or "")
+        logger.info(f"Whop webhook event | type={event_type}")
         data = webhook_data.get("data", {}) or {}
 
         customer_email = normalize_email(
@@ -1238,7 +1256,14 @@ async def whop_webhook(request: Request):
 
         user = table_select_one("users", {"email": customer_email})
         if not user:
-            return {"status": "ignored", "reason": "user not found"}
+    logger.warning(f"Whop webhook ignored | reason=user_not_found | email={customer_email}")
+    create_log(
+        action="whop_webhook",
+        status="failed",
+        provider="whop",
+        message=f"user_not_found email={customer_email}"
+    )
+    return {"status": "ignored", "reason": "user not found"}
 
         plan_hint = json.dumps(data)
         inferred_plan = infer_plan_from_text(plan_hint) or user.get("plan", "basic")
@@ -1306,6 +1331,16 @@ async def whop_webhook(request: Request):
                 }
                 table_insert_one("transactions", transaction)
 
+logger.info(f"Whop webhook activated subscription | user_id={user['id']} | plan={inferred_plan}")
+
+create_log(
+    action="whop_webhook",
+    status="success",
+    user_id=user["id"],
+    provider="whop",
+    message=f"payment succeeded plan={inferred_plan}"
+)
+
             return {"status": "activated"}
 
         if event_type in {
@@ -1325,12 +1360,28 @@ async def whop_webhook(request: Request):
                     "trial_ends_at": None
                 }
             )
+
+logger.info(f"Whop webhook deactivated subscription | user_id={user['id']}")
+
+create_log(
+    action="whop_webhook",
+    status="success",
+    user_id=user["id"],
+    provider="whop",
+    message="subscription deactivated"
+)
             return {"status": "deactivated"}
 
         return {"status": "ignored", "event_type": event_type}
 
     except Exception as e:
-        logger.error(f"WHOP WEBHOOK ERROR: {e}")
+logger.error(f"WHOP WEBHOOK ERROR: {e}", exc_info=True)
+create_log(
+    action="whop_webhook",
+    status="failed",
+    provider="whop",
+    message=str(e)
+)
         raise HTTPException(status_code=400, detail="Invalid Whop webhook")
 
 # ==================== DOCUMENT ROUTES ====================
@@ -1814,10 +1865,10 @@ async def get_integrations(user: dict = Depends(get_current_user)):
 
     return [IntegrationResponse(**row) for row in rows]
 
-
 @api_router.post("/integrations/connect")
 async def connect_integration(payload: IntegrationConnect, user: dict = Depends(get_current_user)):
     require_feature_access(user)
+    logger.info(f"Integration connect attempt | user_id={user['id']} | platform={payload.platform}")
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
@@ -1850,12 +1901,23 @@ async def connect_integration(payload: IntegrationConnect, user: dict = Depends(
             }
         )
 
-    return {"message": f"{payload.platform} connected successfully"}
+    logger.info(f"Integration connected | user_id={user['id']} | platform={payload.platform}")
+
+create_log(
+    action="integration_connect",
+    status="success",
+    user_id=user["id"],
+    provider=payload.platform,
+    message="Connected successfully"
+)
+
+return {"message": f"{payload.platform} connected successfully"}
 
 
 @api_router.delete("/integrations/{platform}")
 async def disconnect_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
+    logger.info(f"Integration disconnect attempt | user_id={user['id']} | platform={platform}")
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
@@ -1867,13 +1929,31 @@ async def disconnect_integration(platform: str, user: dict = Depends(get_current
 
     deleted = table_delete("integrations", {"user_id": user["id"], "platform": platform})
     if not deleted:
-        raise HTTPException(status_code=404, detail="Integration not found")
+    logger.warning(f"Integration disconnect failed | user_id={user['id']} | platform={platform} | reason=not_found")
+    create_log(
+        action="integration_disconnect",
+        status="failed",
+        user_id=user["id"],
+        provider=platform,
+        message="Integration not found"
+    )
+    raise HTTPException(status_code=404, detail="Integration not found")
 
+logger.info(f"Integration disconnected | user_id={user['id']} | platform={platform}")
+
+create_log(
+    action="integration_disconnect",
+    status="success",
+    user_id=user["id"],
+    provider=platform,
+    message="Disconnected successfully"
+)
     return {"message": f"{platform} disconnected"}
 
 @api_router.post("/integrations/{platform}/sync")
 async def sync_integration(platform: str, user: dict = Depends(get_current_user)):
     require_feature_access(user)
+    logger.info(f"Sync started | user_id={user['id']} | platform={platform}")
 
     if not check_plan_access(user, "premium"):
         raise HTTPException(status_code=403, detail="Premium plan required")
@@ -1963,10 +2043,20 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
         if transactions:
             table_insert_many("transactions", transactions)
 
-        return {
-            "message": f"Imported {len(transactions)} new Shopify orders",
-            "count": len(transactions)
-        }
+        logger.info(f"Sync success | user_id={user['id']} | platform=shopify | imported={len(transactions)}")
+
+create_log(
+    action="sync",
+    status="success",
+    user_id=user["id"],
+    provider="shopify",
+    message=f"Imported {len(transactions)} orders"
+)
+
+return {
+    "message": f"Imported {len(transactions)} new Shopify orders",
+    "count": len(transactions)
+}
 
     if platform == "whop":
         access_token = get_whop_access_token_for_user(integration)
@@ -2024,11 +2114,30 @@ async def sync_integration(platform: str, user: dict = Depends(get_current_user)
                 )
                 imported += 1
 
-        return {
-            "message": f"Imported {imported} Whop transactions",
-            "count": imported
-        }
+        logger.info(f"Sync success | user_id={user['id']} | platform=whop | imported={imported}")
 
+create_log(
+    action="sync",
+    status="success",
+    user_id=user["id"],
+    provider="whop",
+    message=f"Imported {imported} transactions"
+)
+
+return {
+    "message": f"Imported {imported} Whop transactions",
+    "count": imported
+}
+
+    logger.error(f"Sync failed | user_id={user['id']} | platform={platform}")
+
+create_log(
+    action="sync",
+    status="failed",
+    user_id=user["id"],
+    provider=platform,
+    message="Unsupported platform or error"
+)
     raise HTTPException(status_code=400, detail=f"Sync not supported yet for {platform}")
 
 # ==================== TAX INSIGHTS ROUTES (PREMIUM) ====================
