@@ -845,7 +845,7 @@ def to_user_response(user: dict) -> UserResponse:
         subscription_status=user.get("subscription_status", "inactive"),
         created_at=user["created_at"],
         whop_manage_url=user.get("whop_manage_url"),
-        whop_membership_id=user.get("whop_membership_id")
+        whop_membership_id=user.get("whop_membership_id"),
         onboarding_completed=user.get("onboarding_completed", False),
         onboarding_step=user.get("onboarding_step", 1)
     )
