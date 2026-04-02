@@ -43,6 +43,11 @@ const ProtectedRoute = ({ children }) => {
     return <LoadingScreen />;
   }
 
+  // 🔥 ADD THIS (onboarding check)
+  if (!user.onboarding_completed) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   if (
     user.subscription_status !== "trial" &&
     user.subscription_status !== "active"
@@ -94,6 +99,16 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
+
+          {/* 🔥 NEW ONBOARDING ROUTE */}
+          <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute>
+                <OnboardingPage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/dashboard"
