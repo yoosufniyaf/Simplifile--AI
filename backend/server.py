@@ -2,6 +2,8 @@ import hmac
 import hashlib
 import os
 import requests
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 from fastapi.responses import RedirectResponse, StreamingResponse
 from whop_sdk import Whop
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Request
@@ -1876,19 +1878,42 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
             headers={"Content-Disposition": f'attachment; filename="{report_type}.csv"'}
         )
 
-    pdf_text = f"""SIMPLIFILE AI FINANCIAL REPORT
+        pdf_buffer = io.BytesIO()
+    pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
+    width, height = letter
 
-Report Type: {report.report_type}
-Period: {report.period}
-Generated At: {report.generated_at}
+    y = height - 50
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(50, y, "SIMPLIFILE AI FINANCIAL REPORT")
 
-REPORT DATA
-{json.dumps(report.data, indent=2)}
-"""
+    y -= 30
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(50, y, f"Report Type: {report.report_type}")
+    y -= 20
+    pdf.drawString(50, y, f"Period: {report.period}")
+    y -= 20
+    pdf.drawString(50, y, f"Generated At: {report.generated_at}")
 
-    pdf_bytes = io.BytesIO(pdf_text.encode("utf-8"))
+    y -= 30
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "REPORT DATA")
+
+    y -= 20
+    pdf.setFont("Helvetica", 10)
+
+    for line in json.dumps(report.data, indent=2).splitlines():
+        if y < 50:
+            pdf.showPage()
+            y = height - 50
+            pdf.setFont("Helvetica", 10)
+        pdf.drawString(50, y, line[:100])
+        y -= 15
+
+    pdf.save()
+    pdf_buffer.seek(0)
+
     return StreamingResponse(
-        pdf_bytes,
+        pdf_buffer,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{report_type}.pdf"'}
     )
