@@ -2222,81 +2222,65 @@ def connect_shopify(shop: str, token: str):
     return RedirectResponse(auth_url)
 
 
-@api_router.get("/integrations/whop/callback")
-async def whop_callback(code: str, state: str):
-    if not WHOP_CLIENT_ID or not WHOP_CLIENT_SECRET or not WHOP_OAUTH_REDIRECT_URI:
-        raise HTTPException(status_code=500, detail="Whop OAuth not configured")
+@api_router.get("/integrations/shopify/callback")
+def shopify_callback(code: str, shop: str, state: str):
+    try:
+        payload = jwt.decode(state, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
-    user_id = decode_whop_oauth_state(state)
+    token_url = f"https://{shop}/admin/oauth/access_token"
 
-    user = table_select_one("users", {"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    pkce_verifier = user.get("whop_pkce_verifier")
-    if not pkce_verifier:
-        raise HTTPException(status_code=400, detail="Missing PKCE verifier. Start Whop connect again.")
-
-    token_response = requests.post(
-        "https://api.whop.com/oauth/token",
-        headers={"Content-Type": "application/json"},
+    response = requests.post(
+        token_url,
         json={
-            "grant_type": "authorization_code",
+            "client_id": SHOPIFY_CLIENT_ID,
+            "client_secret": SHOPIFY_CLIENT_SECRET,
             "code": code,
-            "redirect_uri": WHOP_OAUTH_REDIRECT_URI,
-            "client_id": WHOP_CLIENT_ID,
-            "client_secret": WHOP_CLIENT_SECRET,
-            "code_verifier": pkce_verifier,
         },
-        timeout=30,
     )
 
-    if token_response.status_code != 200:
-        raise HTTPException(status_code=400, detail=f"Whop token exchange failed: {token_response.text}")
+    data = response.json()
+    access_token = data.get("access_token")
 
-    token_data = token_response.json()
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Failed to get Shopify token")
 
-    access_token = token_data.get("access_token")
-    refresh_token = token_data.get("refresh_token")
-    expires_in = int(token_data.get("expires_in") or 3600)
-
-    if not access_token or not refresh_token:
-        raise HTTPException(status_code=400, detail="Invalid Whop token response")
-
-    existing = table_select_one("integrations", {"user_id": user_id, "platform": "whop"})
-
-    integration_data = {
-        "platform": "whop",
-        "status": "connected",
-        "connected_at": now_iso(),
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
-    }
+    existing = table_select_one("integrations", {
+        "user_id": user_id,
+        "platform": "shopify"
+    })
 
     if existing:
-        table_update("integrations", {"id": existing["id"]}, integration_data)
+        table_update(
+            "integrations",
+            {"id": existing["id"]},
+            {
+                "status": "connected",
+                "connected_at": now_iso(),
+                "shop": shop,
+                "access_token": access_token,
+            }
+        )
     else:
         table_insert_one(
             "integrations",
             {
                 "id": str(uuid.uuid4()),
                 "user_id": user_id,
-                **integration_data,
+                "platform": "shopify",
+                "status": "connected",
+                "connected_at": now_iso(),
+                "shop": shop,
+                "access_token": access_token,
             }
         )
 
-    table_update(
-        "users",
-        {"id": user_id},
-        {
-            "whop_pkce_verifier": None,
-            "whop_oauth_nonce": None,
-        }
-    )
+    create_shopify_webhooks(shop, access_token)
 
     return RedirectResponse(
-        f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/dashboard/integrations?whop=connected"
+        f"{os.environ.get('FRONTEND_URL', '').rstrip('/')}/dashboard/integrations"
     )
 
 # ==================== REGISTER ROUTER ====================
