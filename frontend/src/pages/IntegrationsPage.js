@@ -315,11 +315,15 @@ const IntegrationsPage = () => {
                     </Button>
 
                     <Button
-                      variant={isReconnectRequired ? "default" : "destructive"}
-                      onClick={() => openConnectDialog(integration.platform)}
-                    >
-                      {isReconnectRequired ? `Reconnect ${info.name}` : "Disconnect"}
-                    </Button>
+  variant={isReconnectRequired ? "default" : "destructive"}
+  onClick={() =>
+    isReconnectRequired
+      ? openConnectDialog(integration.platform)
+      : handleDisconnect(integration.platform)
+  }
+>
+  {isReconnectRequired ? `Reconnect ${info.name}` : "Disconnect"}
+</Button>
                   </>
                 )}
               </CardContent>
