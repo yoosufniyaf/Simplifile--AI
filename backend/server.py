@@ -1903,24 +1903,24 @@ if format == "csv":
             writer.writerow(["Net Cash Flow", money_csv(data.get("net_cash_flow", 0))])
 
         for key, value in data.items():
-            if isinstance(value, dict) and value:
-                writer.writerow([])
-                writer.writerow([pretty_csv_label(key)])
-                writer.writerow(["Item", "Amount"])
+    if isinstance(value, dict) and value:
+        writer.writerow([])
+        writer.writerow([pretty_csv_label(key)])
+        writer.writerow(["Item", "Amount"])
 
-                for sub_key, sub_value in value.items():
-                    writer.writerow([pretty_csv_label(sub_key), money_csv(sub_value)])
+        for sub_key, sub_value in value.items():
+            writer.writerow([pretty_csv_label(sub_key), money_csv(sub_value)])
 
-        csv_bytes = io.BytesIO(output.getvalue().encode("utf-8"))
-        return StreamingResponse(
-            csv_bytes,
-            media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename=\"{report_type}.csv\"'}
-        )
+csv_bytes = io.BytesIO(output.getvalue().encode("utf-8"))
+return StreamingResponse(
+    csv_bytes,
+    media_type="text/csv",
+    headers={"Content-Disposition": f'attachment; filename=\"{report_type}.csv\"'}
+)
 
-    pdf_buffer = io.BytesIO()
-    pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
-    width, height = letter
+pdf_buffer = io.BytesIO()
+pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
+width, height = letter
     def money(value):
         try:
             return f"${float(value):,.2f}"
