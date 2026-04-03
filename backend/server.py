@@ -1929,7 +1929,7 @@ def money(value):
 
 def pretty_label(text):
         return str(text).replace("_", " ").title()
-    y = height - 50
+y = height - 50
 
     # Header
     pdf.setFont("Helvetica-Bold", 22)
