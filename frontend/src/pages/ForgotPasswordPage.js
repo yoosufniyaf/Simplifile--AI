@@ -4,7 +4,6 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { FileText } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -43,21 +42,21 @@ const ForgotPasswordPage = () => {
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-6">
           <Link to="/" className="flex items-center gap-3">
-  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 glow-button flex items-center justify-center">
-    <div className="relative w-5 h-5">
-      <div className="absolute w-2 h-2 bg-white rounded-full top-0 left-1.5" />
-      <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 left-0" />
-      <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 right-0" />
-      <div className="absolute w-full h-full border border-white/30 rounded-full" />
-    </div>
-  </div>
-  <span
-    className="font-semibold text-xl"
-    style={{ fontFamily: "Outfit, sans-serif" }}
-  >
-    Simplifile AI
-  </span>
-</Link>
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 glow-button flex items-center justify-center">
+              <div className="relative w-5 h-5">
+                <div className="absolute w-2 h-2 bg-white rounded-full top-0 left-1.5" />
+                <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 left-0" />
+                <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 right-0" />
+                <div className="absolute w-full h-full border border-white/30 rounded-full" />
+              </div>
+            </div>
+            <span
+              className="font-semibold text-xl"
+              style={{ fontFamily: "Outfit, sans-serif" }}
+            >
+              Simplifile AI
+            </span>
+          </Link>
         </div>
 
         <Card>
