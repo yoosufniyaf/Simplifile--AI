@@ -447,6 +447,7 @@ const BookkeepingPage = () => {
       <SelectItem value="shopify">Shopify</SelectItem>
       <SelectItem value="manual">Manual</SelectItem>
       <SelectItem value="csv_import">CSV</SelectItem>
+      <SelectItem value="whop">Whop</SelectItem>
     </SelectContent>
   </Select>
 </div>
