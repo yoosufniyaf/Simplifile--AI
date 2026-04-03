@@ -1852,8 +1852,9 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     }
 
     report = report_map[report_type]
+    data = report.data
 
-        if format == "csv":
+    if format == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
 
@@ -1885,8 +1886,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
         writer.writerow(["Summary"])
         writer.writerow(["Item", "Amount"])
 
-        data = report.data
-
         if report.report_type == "profit-loss":
             writer.writerow(["Revenue", money_csv(data.get("revenue", 0))])
             writer.writerow(["Total Expenses", money_csv(data.get("total_expenses", 0))])
@@ -1915,8 +1914,10 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
         return StreamingResponse(
             csv_bytes,
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename=\"{report_type}.csv\"'}
+            headers={"Content-Disposition": f'attachment; filename="{report_type}.csv"'}
         )
+
+    pdf_buffer = io.BytesIO()
     pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
     width, height = letter
 
@@ -1927,11 +1928,17 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
             return "$0.00"
 
     def pretty_label(text):
-        return str(text).replace("_", " ").title()
+        text = str(text).replace("_", " ").replace("-", " ").strip().title()
+        if text == "Profit Loss":
+            return "Profit & Loss"
+        if text == "Cash Flow":
+            return "Cash Flow"
+        if text == "Balance Sheet":
+            return "Balance Sheet"
+        return text
 
     y = height - 50
 
-    # Header
     pdf.setFont("Helvetica-Bold", 22)
     pdf.drawString(50, y, "SIMPLIFILE AI")
 
@@ -1942,7 +1949,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     y -= 18
     pdf.line(50, y, width - 50, y)
 
-    # Report info
     y -= 28
     pdf.setFont("Helvetica", 11)
     pdf.drawString(50, y, f"Report Type: {pretty_label(report.report_type)}")
@@ -1951,7 +1957,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     y -= 18
     pdf.drawString(50, y, f"Generated At: {report.generated_at}")
 
-    # Summary section
     y -= 35
     pdf.setFont("Helvetica-Bold", 14)
     pdf.drawString(50, y, "Summary")
@@ -1963,7 +1968,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     pdf.setFont("Helvetica", 11)
 
     summary_rows = []
-    data = report.data
 
     if report.report_type == "profit-loss":
         summary_rows = [
@@ -1989,7 +1993,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
         pdf.drawRightString(width - 60, y, value)
         y -= 20
 
-    # Detail sections
     nested_sections = []
     for key, value in data.items():
         if isinstance(value, dict) and value:
@@ -2020,7 +2023,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
             pdf.drawRightString(width - 60, y, money(item_value))
             y -= 20
 
-    # Footer note
     if y < 80:
         pdf.showPage()
         y = height - 50
@@ -2035,7 +2037,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     return StreamingResponse(
         pdf_buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename=\"{report_type}.pdf\"'}
+        headers={"Content-Disposition": f'attachment; filename="{report_type}.pdf"'}
     )
 
 # ==================== INTEGRATIONS ROUTES (PREMIUM) ====================
