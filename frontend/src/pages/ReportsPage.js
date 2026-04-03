@@ -76,10 +76,10 @@ const ReportsPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("profit-loss");
 
-  const hasPremiumAccess = checkPlanAccess("premium");
+  const hasEnterpriseAccess = checkPlanAccess("enterprise");
 
   const fetchReports = useCallback(async () => {
-    if (!hasPremiumAccess) {
+    if (!hasEnterpriseAccess) {
       setLoading(false);
       return;
     }
@@ -100,7 +100,7 @@ const ReportsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [token, hasPremiumAccess]);
+  }, [token, hasEnterpriseAccess]);
 
   useEffect(() => {
     fetchReports();
@@ -146,7 +146,7 @@ const ReportsPage = () => {
     }));
   };
 
-  if (!hasPremiumAccess) {
+  if (!hasEnterpriseAccess) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center" data-testid="reports-locked">
         <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
