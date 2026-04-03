@@ -1932,35 +1932,35 @@ def pretty_label(text):
 y = height - 50
 
     # Header
-    pdf.setFont("Helvetica-Bold", 22)
-    pdf.drawString(50, y, "SIMPLIFILE AI")
+pdf.setFont("Helvetica-Bold", 22)
+pdf.drawString(50, y, "SIMPLIFILE AI")
 
     y -= 28
-    pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(50, y, "Financial Report")
+pdf.setFont("Helvetica-Bold", 16)
+pdf.drawString(50, y, "Financial Report")
 
     y -= 18
-    pdf.line(50, y, width - 50, y)
+pdf.line(50, y, width - 50, y)
 
     # Report info
     y -= 28
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(50, y, f"Report Type: {pretty_label(report.report_type)}")
+pdf.setFont("Helvetica", 11)
+pdf.drawString(50, y, f"Report Type: {pretty_label(report.report_type)}")
     y -= 18
-    pdf.drawString(50, y, f"Period: {pretty_label(report.period)}")
+pdf.drawString(50, y, f"Period: {pretty_label(report.period)}")
     y -= 18
-    pdf.drawString(50, y, f"Generated At: {report.generated_at}")
+pdf.drawString(50, y, f"Generated At: {report.generated_at}")
 
     # Summary section
     y -= 35
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(50, y, "Summary")
+pdf.setFont("Helvetica-Bold", 14)
+pdf.drawString(50, y, "Summary")
 
     y -= 15
-    pdf.line(50, y, width - 50, y)
+pdf.line(50, y, width - 50, y)
 
     y -= 25
-    pdf.setFont("Helvetica", 11)
+pdf.setFont("Helvetica", 11)
 
     summary_rows = []
     data = report.data
