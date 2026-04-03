@@ -1897,20 +1897,19 @@ if format == "csv":
             writer.writerow(["Total Liabilities", money_csv(data.get("total_liabilities", 0))])
             writer.writerow(["Equity", money_csv(data.get("equity", 0))])
 
-        elif report.report_type == "cash-flow":
+                elif report.report_type == "cash-flow":
             writer.writerow(["Cash In", money_csv(data.get("cash_in", 0))])
             writer.writerow(["Cash Out", money_csv(data.get("cash_out", 0))])
             writer.writerow(["Net Cash Flow", money_csv(data.get("net_cash_flow", 0))])
 
         for key, value in data.items():
-    if isinstance(value, dict) and value:
-        writer.writerow([])
-        writer.writerow([pretty_csv_label(key)])
-        writer.writerow(["Item", "Amount"])
+            if isinstance(value, dict) and value:
+                writer.writerow([])
+                writer.writerow([pretty_csv_label(key)])
+                writer.writerow(["Item", "Amount"])
 
-        for sub_key, sub_value in value.items():
-            writer.writerow([pretty_csv_label(sub_key), money_csv(sub_value)])
-
+                for sub_key, sub_value in value.items():
+                    writer.writerow([pretty_csv_label(sub_key), money_csv(sub_value)])
 csv_bytes = io.BytesIO(output.getvalue().encode("utf-8"))
 return StreamingResponse(
     csv_bytes,
