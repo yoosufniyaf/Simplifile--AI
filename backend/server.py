@@ -1920,15 +1920,15 @@ return StreamingResponse(
 pdf_buffer = io.BytesIO()
 pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
 width, height = letter
-    def money(value):
+
+def money(value):
         try:
             return f"${float(value):,.2f}"
         except Exception:
             return "$0.00"
 
-    def pretty_label(text):
+def pretty_label(text):
         return str(text).replace("_", " ").title()
-
     y = height - 50
 
     # Header
