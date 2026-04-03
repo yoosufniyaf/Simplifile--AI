@@ -1968,7 +1968,6 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     pdf.setFont("Helvetica", 11)
 
     summary_rows = []
-    data = report.data
 
     if report.report_type == "profit-loss":
         summary_rows = [
