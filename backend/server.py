@@ -1897,7 +1897,7 @@ if format == "csv":
             writer.writerow(["Total Liabilities", money_csv(data.get("total_liabilities", 0))])
             writer.writerow(["Equity", money_csv(data.get("equity", 0))])
 
-                elif report.report_type == "cash-flow":
+        elif report.report_type == "cash-flow":
             writer.writerow(["Cash In", money_csv(data.get("cash_in", 0))])
             writer.writerow(["Cash Out", money_csv(data.get("cash_out", 0))])
             writer.writerow(["Net Cash Flow", money_csv(data.get("net_cash_flow", 0))])
