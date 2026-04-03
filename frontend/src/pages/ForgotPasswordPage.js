@@ -42,17 +42,22 @@ const ForgotPasswordPage = () => {
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-6">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <FileText className="h-5 w-5 text-white" />
-            </div>
-            <span
-              className="text-xl font-semibold"
-              style={{ fontFamily: "Outfit, sans-serif" }}
-            >
-              Simplifile AI
-            </span>
-          </Link>
+          <Link to="/" className="flex items-center gap-3">
+  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 glow-button flex items-center justify-center">
+    <div className="relative w-5 h-5">
+      <div className="absolute w-2 h-2 bg-white rounded-full top-0 left-1.5" />
+      <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 left-0" />
+      <div className="absolute w-2 h-2 bg-white rounded-full bottom-0 right-0" />
+      <div className="absolute w-full h-full border border-white/30 rounded-full" />
+    </div>
+  </div>
+  <span
+    className="font-semibold text-xl"
+    style={{ fontFamily: "Outfit, sans-serif" }}
+  >
+    Simplifile AI
+  </span>
+</Link>
         </div>
 
         <Card>
