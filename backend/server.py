@@ -1739,6 +1739,99 @@ async def get_bookkeeping_insights(user: dict = Depends(get_current_user)):
 
 # ==================== REPORT ROUTES (PREMIUM) ====================
 
+@api_router.get("/reports/profit-loss", response_model=FinancialReportResponse)
+async def profit_loss_report(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
+
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
+    revenue = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
+
+    expenses_by_category = {}
+    total_expenses = 0.0
+
+    for t in transactions:
+        if t.get("type") == "expense":
+            amount = abs(float(t["amount"]))
+            total_expenses += amount
+            category = t.get("category", "other")
+            expenses_by_category[category] = expenses_by_category.get(category, 0) + amount
+
+    net_income = revenue - total_expenses
+
+    return FinancialReportResponse(
+        report_type="profit-loss",
+        period="all-time",
+        data={
+            "revenue": round(revenue, 2),
+            "expenses": {k: round(v, 2) for k, v in expenses_by_category.items()},
+            "total_expenses": round(total_expenses, 2),
+            "net_income": round(net_income, 2),
+        },
+        generated_at=now_iso()
+    )
+
+@api_router.get("/reports/balance-sheet", response_model=FinancialReportResponse)
+async def balance_sheet_report(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
+
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
+    income_total = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
+    expense_total = sum(abs(float(t["amount"])) for t in transactions if t.get("type") == "expense")
+    cash = income_total - expense_total
+    tax_payable = max(cash * 0.15, 0)
+
+    total_assets = cash
+    total_liabilities = tax_payable
+    equity = total_assets - total_liabilities
+
+    return FinancialReportResponse(
+        report_type="balance-sheet",
+        period="all-time",
+        data={
+            "assets": {
+                "cash": round(cash, 2),
+                "accounts_receivable": 0,
+            },
+            "liabilities": {
+                "accounts_payable": 0,
+                "tax_payable": round(tax_payable, 2),
+            },
+            "total_assets": round(total_assets, 2),
+            "total_liabilities": round(total_liabilities, 2),
+            "equity": round(equity, 2),
+        },
+        generated_at=now_iso()
+    )
+
+@api_router.get("/reports/cash-flow", response_model=FinancialReportResponse)
+async def cash_flow_report(user: dict = Depends(get_current_user)):
+    require_feature_access(user)
+
+    if not check_plan_access(user, "premium"):
+        raise HTTPException(status_code=403, detail="Premium plan required")
+
+    transactions = table_select("transactions", {"user_id": user["id"]}, limit=1000)
+    cash_in = sum(float(t["amount"]) for t in transactions if t.get("type") == "income")
+    cash_out = sum(abs(float(t["amount"])) for t in transactions if t.get("type") == "expense")
+    net_cash_flow = cash_in - cash_out
+
+    return FinancialReportResponse(
+        report_type="cash-flow",
+        period="all-time",
+        data={
+            "cash_in": round(cash_in, 2),
+            "cash_out": round(cash_out, 2),
+            "net_cash_flow": round(net_cash_flow, 2),
+        },
+        generated_at=now_iso()
+    )
+
 @api_router.get("/reports/export/{report_type}")
 async def export_report(report_type: str, format: str = "csv", user: dict = Depends(get_current_user)):
     require_feature_access(user)
@@ -1760,7 +1853,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
 
     report = report_map[report_type]
 
-    if format == "csv":
+        if format == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
 
@@ -1822,10 +1915,8 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
         return StreamingResponse(
             csv_bytes,
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{report_type}.csv"'}
+            headers={"Content-Disposition": f'attachment; filename=\"{report_type}.csv\"'}
         )
-
-    pdf_buffer = io.BytesIO()
     pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
     width, height = letter
 
@@ -1840,6 +1931,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
 
     y = height - 50
 
+    # Header
     pdf.setFont("Helvetica-Bold", 22)
     pdf.drawString(50, y, "SIMPLIFILE AI")
 
@@ -1850,6 +1942,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     y -= 18
     pdf.line(50, y, width - 50, y)
 
+    # Report info
     y -= 28
     pdf.setFont("Helvetica", 11)
     pdf.drawString(50, y, f"Report Type: {pretty_label(report.report_type)}")
@@ -1858,6 +1951,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     y -= 18
     pdf.drawString(50, y, f"Generated At: {report.generated_at}")
 
+    # Summary section
     y -= 35
     pdf.setFont("Helvetica-Bold", 14)
     pdf.drawString(50, y, "Summary")
@@ -1895,6 +1989,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
         pdf.drawRightString(width - 60, y, value)
         y -= 20
 
+    # Detail sections
     nested_sections = []
     for key, value in data.items():
         if isinstance(value, dict) and value:
@@ -1925,6 +2020,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
             pdf.drawRightString(width - 60, y, money(item_value))
             y -= 20
 
+    # Footer note
     if y < 80:
         pdf.showPage()
         y = height - 50
@@ -1939,7 +2035,7 @@ async def export_report(report_type: str, format: str = "csv", user: dict = Depe
     return StreamingResponse(
         pdf_buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{report_type}.pdf"'}
+        headers={"Content-Disposition": f'attachment; filename=\"{report_type}.pdf\"'}
     )
 
 # ==================== INTEGRATIONS ROUTES (PREMIUM) ====================
