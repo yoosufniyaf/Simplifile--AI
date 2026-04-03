@@ -254,7 +254,7 @@ const IntegrationsPage = () => {
         </Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {integrations.map((integration) => {
           const info = PLATFORM_INFO[integration.platform];
           const isConnected = integration.status === "connected";
