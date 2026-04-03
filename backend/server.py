@@ -1917,11 +1917,10 @@ if format == "csv":
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename=\"{report_type}.csv\"'}
         )
-        
+
     pdf_buffer = io.BytesIO()
     pdf = canvas.Canvas(pdf_buffer, pagesize=letter)
     width, height = letter
-
     def money(value):
         try:
             return f"${float(value):,.2f}"
