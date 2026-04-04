@@ -973,7 +973,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
 
     try:
         resend.Emails.send({
-            "from": "Simplifile AI <no-reply@simplifileai.com>",
+            "from": "Simplifile AI <noreply@simplifileai.com>",
             "to": [email],
             "subject": "Reset your password",
             "html": f"""
