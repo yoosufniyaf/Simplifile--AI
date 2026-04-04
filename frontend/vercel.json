@@ -1,0 +1,15 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "simplifile-ai.vercel.app"
+        }
+      ],
+      "destination": "https://simplifileai.com/:path*",
+      "permanent": true
+    }
+  ]
+}
