@@ -245,10 +245,11 @@ const SettingsPage = () => {
   };
 
   const handleManageSubscription = () => {
-    if (!user?.whop_manage_url) {
-      toast.error("No active subscription found yet.");
-      return;
-    }
+  const url =
+    user?.whop_manage_url || "https://whop.com/account/subscriptions/";
+
+  window.open(url, "_blank");
+};
 
     window.location.href = user.whop_manage_url;
   };
