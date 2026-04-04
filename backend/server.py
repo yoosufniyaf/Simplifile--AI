@@ -902,8 +902,10 @@ async def register(user_data: UserCreate):
     }
 
     table_insert_one("users", user_doc)
-        try:
+            # SEND WELCOME EMAIL
+    try:
         resend.api_key = os.environ.get("RESEND_API_KEY")
+        frontend_url = os.environ.get("FRONTEND_URL", "").strip()
 
         resend.Emails.send({
             "from": "Simplifile AI <noreply@simplifileai.com>",
