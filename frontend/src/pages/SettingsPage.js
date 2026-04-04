@@ -249,10 +249,8 @@ const SettingsPage = () => {
     user?.whop_manage_url || "https://whop.com/account/subscriptions/";
 
   window.open(url, "_blank");
-};
-
-    window.location.href = user.whop_manage_url;
   };
+window.location.href = user.whop_manage_url;
 
   return (
     <div className="space-y-8 max-w-4xl" data-testid="settings-page">
