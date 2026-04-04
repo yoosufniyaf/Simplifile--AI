@@ -263,6 +263,9 @@ const SettingsPage = () => {
         <p className="text-muted-foreground mt-1">
           Manage your account and subscription
         </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Reach out: simplifileai@gmail.com for support
+         </p>
       </div>
 
       <Card>
