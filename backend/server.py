@@ -1347,7 +1347,7 @@ async def whop_webhook(request: Request):
                     "trial_ends_at": None,
                     "last_payment_id": payment_id,
                     "whop_membership_id": membership.get("id"),
-                    "whop_manage_url": membership.get("manage_url") or membership.get("manageUrl")
+                    "whop_manage_url": membership.get("manage_url") or membership.get("manageUrl") or "https://whop.com/account/subscriptions/"
                 }
             )
 
