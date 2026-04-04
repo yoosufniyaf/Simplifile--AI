@@ -5,7 +5,7 @@
       "has": [
         {
           "type": "host",
-          "value": "simplifile-ai.vercel.app"
+          "value": "*.vercel.app"
         }
       ],
       "destination": "https://simplifileai.com/:path*",
