@@ -52,10 +52,11 @@ const CheckoutSuccessPage = () => {
       try {
         const storedToken = localStorage.getItem("token");
 
-        if (!storedToken) {
-          finishWithError("You are not logged in. Please log in and try again.");
-          return false;
-        }
+if (!storedToken) {
+  setStatus("error");
+  setMessage("Session expired. Please log in to complete activation.");
+  return;
+}
 
         const response = await axios.get(`${API}/auth/me`, {
           headers: {
