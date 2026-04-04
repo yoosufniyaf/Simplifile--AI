@@ -490,6 +490,8 @@ class UserResponse(BaseModel):
     created_at: str
     whop_manage_url: Optional[str] = None
     whop_membership_id: Optional[str] = None
+    subscription_expires_at: Optional[str] = None
+    cancel_at_period_end: bool = False
     onboarding_completed: bool = False
     onboarding_step: int = 1
 
@@ -806,6 +808,18 @@ async def normalize_user_access(user: dict) -> dict:
                 "trial_ends_at": None
             }
 
+    if user.get("subscription_status") == "active":
+        subscription_expires_at = parse_iso_datetime(user.get("subscription_expires_at"))
+        now = datetime.now(timezone.utc)
+
+        if subscription_expires_at and subscription_expires_at <= now:
+            updated_fields = {
+                "subscription_status": "inactive",
+                "trial_started": False,
+                "trial_ends_at": None,
+                "cancel_at_period_end": False,
+            }
+
     if updated_fields:
         table_update("users", {"id": user["id"]}, updated_fields)
         user.update(updated_fields)
@@ -816,7 +830,10 @@ def has_feature_access(user: dict) -> bool:
     status = user.get("subscription_status", "inactive")
 
     if status == "active":
-        return True
+        subscription_expires_at = parse_iso_datetime(user.get("subscription_expires_at"))
+        if subscription_expires_at:
+            return subscription_expires_at > datetime.now(timezone.utc)
+        return False
 
     if status == "trial":
         trial_ends_at = parse_iso_datetime(user.get("trial_ends_at"))
@@ -849,6 +866,8 @@ def to_user_response(user: dict) -> UserResponse:
         created_at=user["created_at"],
         whop_manage_url=user.get("whop_manage_url"),
         whop_membership_id=user.get("whop_membership_id"),
+        subscription_expires_at=user.get("subscription_expires_at"),
+        cancel_at_period_end=bool(user.get("cancel_at_period_end", False)),
         onboarding_completed=user.get("onboarding_completed", False),
         onboarding_step=user.get("onboarding_step", 1)
     )
@@ -1213,13 +1232,19 @@ async def activate_subscription(payload: ActivateSubscriptionRequest, user: dict
     updated = table_update(
         "users",
         {"id": user["id"]},
-        {
+                {
             "plan": plan,
             "billing_cycle": billing_cycle,
             "subscription_status": "active",
             "trial_started": False,
             "trial_ends_at": None,
-            "last_payment_id": payload.payment_id or user.get("last_payment_id")
+            "last_payment_id": payload.payment_id or user.get("last_payment_id"),
+            "subscription_expires_at": (
+                datetime.now(timezone.utc) + timedelta(days=365)
+                if billing_cycle == "annual"
+                else datetime.now(timezone.utc) + timedelta(days=30)
+            ).isoformat(),
+            "cancel_at_period_end": False,
         }
     )
 
@@ -1339,7 +1364,7 @@ async def whop_webhook(request: Request):
             table_update(
                 "users",
                 {"id": user["id"]},
-                {
+                                {
                     "plan": inferred_plan,
                     "billing_cycle": billing_cycle,
                     "subscription_status": "active",
@@ -1347,7 +1372,13 @@ async def whop_webhook(request: Request):
                     "trial_ends_at": None,
                     "last_payment_id": payment_id,
                     "whop_membership_id": membership.get("id"),
-                    "whop_manage_url": membership.get("manage_url") or membership.get("manageUrl") or "https://whop.com/account/subscriptions/"
+                    "whop_manage_url": membership.get("manage_url") or membership.get("manageUrl") or "https://whop.com/account/subscriptions/",
+                    "subscription_expires_at": (
+                        datetime.now(timezone.utc) + timedelta(days=365)
+                        if billing_cycle == "annual"
+                        else datetime.now(timezone.utc) + timedelta(days=30)
+                    ).isoformat(),
+                    "cancel_at_period_end": False,
                 }
             )
 
@@ -1394,9 +1425,30 @@ async def whop_webhook(request: Request):
 
             return {"status": "activated"}
 
-        if event_type in {
+                if event_type in {
             "membership_deactivated",
             "membership.deactivated",
+        }:
+            table_update(
+                "users",
+                {"id": user["id"]},
+                {
+                    "cancel_at_period_end": True
+                }
+            )
+
+            logger.info(f"Whop webhook marked cancel_at_period_end | user_id={user['id']}")
+
+            create_log(
+                action="whop_webhook",
+                status="success",
+                user_id=user["id"],
+                provider="whop",
+                message="subscription set to cancel at period end"
+            )
+            return {"status": "cancel_at_period_end"}
+
+        if event_type in {
             "payment_failed",
             "payment.failed",
             "payment_refunded",
@@ -1408,7 +1460,8 @@ async def whop_webhook(request: Request):
                 {
                     "subscription_status": "inactive",
                     "trial_started": False,
-                    "trial_ends_at": None
+                    "trial_ends_at": None,
+                    "cancel_at_period_end": False,
                 }
             )
 
