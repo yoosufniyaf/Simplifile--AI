@@ -1425,7 +1425,7 @@ async def whop_webhook(request: Request):
 
             return {"status": "activated"}
 
-                if event_type in {
+        if event_type in {
             "membership_deactivated",
             "membership.deactivated",
         }:
