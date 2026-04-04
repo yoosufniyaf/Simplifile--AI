@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import os
 import requests
+import resend
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -941,8 +942,6 @@ async def login(credentials: UserLogin):
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
-    import resend
-
     resend.api_key = os.environ.get("RESEND_API_KEY")
 
     email = normalize_email(payload.email)
