@@ -977,11 +977,25 @@ async def forgot_password(payload: ForgotPasswordRequest):
             "to": [email],
             "subject": "Reset your password",
             "html": f"""
-                <h2>Reset your password</h2>
-                <p>Click below:</p>
-                <a href="{reset_link}">Reset Password</a>
-                <p>This link expires in 1 hour.</p>
-            """
+<div style="font-family: Arial, sans-serif; text-align: center;">
+
+  <img src="https://simplifile-ai.vercel.app/logo.png" width="60" style="margin-bottom: 20px;" />
+
+  <h2 style="margin-bottom: 10px;">Reset your password</h2>
+
+  <p style="color: #555;">Click below to reset your password:</p>
+
+  <a href="{reset_link}" 
+     style="display:inline-block;padding:12px 20px;background:#6366f1;color:white;text-decoration:none;border-radius:8px;margin-top:15px;">
+     Reset Password
+  </a>
+
+  <p style="margin-top:20px;color:#888;font-size:12px;">
+    This link expires in 1 hour.
+  </p>
+
+</div>
+"""
         })
     except Exception as e:
         logger.error(f"EMAIL ERROR: {e}")
