@@ -902,6 +902,40 @@ async def register(user_data: UserCreate):
     }
 
     table_insert_one("users", user_doc)
+        try:
+        resend.api_key = os.environ.get("RESEND_API_KEY")
+
+        resend.Emails.send({
+            "from": "Simplifile AI <noreply@simplifileai.com>",
+            "to": [email],
+            "subject": "Welcome to Simplifile AI",
+            "html": f"""
+            <div style="font-family: Arial, sans-serif; text-align: center; padding: 40px;">
+              <img src="https://simplifile-ai.vercel.app/logo.png" width="80" style="margin-bottom: 25px;" />
+
+              <h2 style="margin-bottom: 10px;">Welcome to Simplifile AI</h2>
+
+              <p style="color: #555; margin-bottom: 20px;">
+                Your account has been created successfully.
+              </p>
+
+              <p style="color: #555; margin-bottom: 25px;">
+                You can now upload documents, explore your dashboard, and get started with your AI-powered CFO.
+              </p>
+
+              <a href="{frontend_url}/login"
+                 style="display:inline-block;padding:14px 24px;background:#6366f1;color:#ffffff !important;text-decoration:none;border-radius:10px;font-weight:600;">
+                 Get Started
+              </a>
+
+              <p style="margin-top:30px;color:#888;font-size:12px;">
+                Welcome aboard.
+              </p>
+            </div>
+            """
+        })
+    except Exception as e:
+        logger.error(f"WELCOME EMAIL ERROR: {e}")
     token = create_token(user_id)
 
     logger.info(f"Register successful | user_id={user_id} | email={email}")
