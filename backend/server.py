@@ -1212,7 +1212,13 @@ async def update_subscription(plan_data: PlanUpdate, user: dict = Depends(get_cu
             "billing_cycle": plan_data.billing_cycle,
             "subscription_status": "active",
             "trial_started": False,
-            "trial_ends_at": None
+            "trial_ends_at": None,
+            "subscription_expires_at": (
+                datetime.now(timezone.utc) + timedelta(days=365)
+                if plan_data.billing_cycle == "annual"
+                else datetime.now(timezone.utc) + timedelta(days=30)
+            ).isoformat(),
+            "cancel_at_period_end": False,
         }
     )
 
